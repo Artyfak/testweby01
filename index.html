@@ -1,574 +1,653 @@
 <!doctype html>
 <html lang="sk">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Náhodný test (Webové technológie – otázky z DOCX)</title>
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    body { margin: 0; background:#0b1020; color:#e8ecff; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 20px; }
-    .card { background:#121a33; border:1px solid #24305c; border-radius: 14px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-    h1 { font-size: 20px; margin: 0 0 10px; }
-    h2 { font-size: 16px; margin: 16px 0 8px; }
-    .row { display:flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    button { cursor:pointer; padding: 10px 14px; border-radius: 12px; border:1px solid #2a3a72; background:#1a2750; color:#e8ecff; text-align:left; }
-    button:hover { filter: brightness(1.08); }
-    button:disabled { opacity: .5; cursor:not-allowed; }
-    .muted { opacity: .75; font-size: 13px; }
-    .qmeta { display:flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-    .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; border:1px solid #2a3a72; background:#0c1430; opacity: .95; }
-    pre { white-space: pre-wrap; word-wrap: break-word; background:#0c1430; border:1px solid #24305c; padding: 12px; border-radius: 12px; margin: 10px 0; }
-    .btns { display:flex; gap: 10px; flex-wrap: wrap; }
-    .good { background:#163a2a; border-color:#2f7a57; }
-    .bad  { background:#3a1d1d; border-color:#8f3b3b; }
-    .hr { height:1px; background:#24305c; margin: 14px 0; }
-    .list { margin: 0; padding-left: 18px; }
-    .reviewItem { margin: 14px 0; padding: 12px; border:1px solid #24305c; border-radius: 12px; background:#0f1730; }
-    .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid #2a3a72; background:#0c1430; margin-right:6px; }
-    .choices { display:flex; flex-direction:column; gap: 10px; }
-    .choiceBtn { width: 100%; }
-    .choiceBtn.correct { border-color:#2f7a57; background:#163a2a; }
-    .choiceBtn.wrong { border-color:#8f3b3b; background:#3a1d1d; }
-    .feedback { margin-top: 12px; padding: 12px; border-radius: 12px; border:1px solid #24305c; background:#0c1430; }
-    .feedback .explain { opacity: .95; }
-    input[type="number"] { width: 90px; padding: 8px 10px; border-radius: 12px; border:1px solid #2a3a72; background:#0c1430; color:#e8ecff; }
-    label.inline { display:flex; gap: 8px; align-items:center; }
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <div class="card">
-    <h1>Náhodný test – Webové technológie (otázky z DOCX)</h1>
-    <div class="row">
-      <button id="startBtn">Spustiť test</button>
-      <button id="restartBtn" disabled>Nový náhodný test</button>
-
-      <label class="inline muted">
-        Počet otázok:
-        <input id="countInput" type="number" min="1" step="1" value="20" />
-      </label>
-
-      <span class="muted" id="bankInfo"></span>
-    </div>
-
-    <div class="hr"></div>
-
-    <div id="quizArea" style="display:none;">
-      <div class="qmeta">
-        <div class="pill" id="qIndex"></div>
-        <div class="pill" id="qPoints"></div>
-        <div class="pill" id="qType"></div>
-      </div>
-
-      <pre id="questionText"></pre>
-
-      <div id="mcqArea">
-        <div class="choices" id="choices"></div>
-        <div class="muted" style="margin-top:8px;">Po kliknutí na odpoveď sa otázka vyhodnotí automaticky.</div>
-      </div>
-
-      <div id="feedback" class="feedback" style="display:none;"></div>
-
-      <div class="hr"></div>
-      <div class="btns">
-        <button id="prevBtn">← Predošlá</button>
-        <button id="nextBtn">Ďalšia →</button>
-        <button id="finishBtn">Ukončiť test</button>
-      </div>
-      <div class="muted" style="margin-top:10px;" id="progress"></div>
-    </div>
-
-    <div id="resultArea" style="display:none;">
-      <h1>Výsledok</h1>
-      <pre id="resultSummary"></pre>
-
-      <div id="missedBox" style="display:none;">
-        <div class="hr"></div>
-        <h2>Otázky, kde si odpovedal(a) zle</h2>
-        <ul class="list" id="missedList"></ul>
-      </div>
-
-      <div class="hr"></div>
-      <h2>Rekapitulácia (každá otázka + tvoja odpoveď + správna odpoveď)</h2>
-      <div id="reviewList"></div>
-    </div>
-  </div>
-</div>
-
-<script>
-/** Utility */
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-function normKey(s) {
-  return String(s).toLowerCase().replace(/\s+/g, " ").trim();
-}
-/** Dedupe: ak je otázka duplicitná, vyhrá posledná verzia */
-function dedupeQuestions(raw) {
-  const map = new Map();
-  for (const item of raw) {
-    if (!item || !item.q) continue;
-    const key = normKey(item.q);
-    map.set(key, item); // last wins
-  }
-  return [...map.values()];
-}
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-
-
-function stripChoicePrefix(ch) {
-  // "A) text" -> "text"
-  return String(ch).replace(/^[A-D]\)\s*/i, "").trim();
-}
-function letterForIndex(i) {
-  return ["A","B","C","D"][i] || "?";
-}
-function makeExplanation(question, correctTextNoPrefix) {
-  const q = String(question || "").toLowerCase();
-  const ans = String(correctTextNoPrefix || "").trim();
-
-  // jednoduché šablóny podľa typu otázky
-  if (q.includes("co znamená zkratka") || q.includes("co znamená zkratka") || q.includes("co znamená zkratka") || q.includes("co znamená zkratka")
-      || q.includes("co znamená zkratka") || q.includes("co znamená zkratka") || q.includes("co znamená zkratka") ) {
-    return `Je to skratka pre: ${ans}.`;
-  }
-  if (q.includes("co znamená zkratka") || q.includes("co znamená zkratka") || q.includes("zkratka") && q.includes("znamená")) {
-    return `Je to skratka pre: ${ans}.`;
-  }
-  if (q.includes("co znamená") && q.includes("zkratka")) {
-    return `Je to skratka pre: ${ans}.`;
-  }
-  if (q.includes("co je to") || q.includes("co je ") || q.includes("co je to "")) {
-    return `Ide o: ${ans}.`;
-  }
-  if (q.includes("k čemu slouží") || q.includes("k cemu slouzi") || q.includes("k čemu je") || q.includes("jaký je hlavní účel") || q.includes("jaky je hlavni ucel") || q.includes("hlavní účel")) {
-    return `Slúži na: ${ans}.`;
-  }
-  if (q.includes("jaký je rozdíl") || q.includes("jaky je rozdil") || q.includes("rozdíl mezi") || q.includes("rozdil mezi")) {
-    return `Rozdiel je, že: ${ans}.`;
-  }
-  if (q.includes("co se stane") || q.includes("co se stane při") || q.includes("co se stane pri")) {
-    return `Správny výsledok je: ${ans} (presne to opisuje, čo sa stane).`;
-  }
-  if (q.includes("která http metoda") || q.includes("která http metoda") || q.includes("http metoda") || q.includes("http metoda se") || q.includes("rest")) {
-    return `V REST/HTTP sa na tento účel používa: ${ans}.`;
-  }
-
-  // fallback: univerzálne vysvetlenie
-  return `Táto možnosť je správna, lebo najpresnejšie vystihuje definíciu/úlohu, na ktorú sa otázka pýta: ${ans}.`;
-}
-}
-
-/** ===========================
- *  BANKA OTÁZOK (z Webové-technologie-150-otázek.docx)
- *  =========================== */
-const BANK_RAW = [
-  {"type": "mcq", "points": 1, "q": "Co znamená zkratka MVC v kontextu vývoje webových aplikací?", "choices": ["A) Model-View-Configuration", "B) Model-View-Controller", "C) Module-View-Connection", "D) Main-Variable-Class"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaká je hlavní odpovědnost vrstvy \"Controller\" v architektuře MVC?", "choices": ["A) Definovat strukturu databáze a vztahy mezi tabulkami.", "B) Zobrazovat data uživateli ve formátu HTML.", "C) Přijímat vstupy od uživatele, zpracovávat aplikační logiku a vybírat vhodné View.", "D) Stylovat stránku pomocí CSS šablon."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Která technologie z uvedených je primárně určena pro multiplatformní vývoj (Windows, Linux, Mac)?", "choices": ["A) .NET Framework", "B) .NET Core (resp. .NET 5+)", "C) Windows Forms", "D) WPF"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je hlavním účelem \".NET Standard\"?", "choices": ["A) Vytvořit novou verzi operačního systému Windows.", "B) Nahradit jazyk C# jazykem Java.", "C) Sdílet stejný kód (knihovny) mezi různými platformami .NET.", "D) Zvýšit rychlost internetového připojení aplikace."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Kde se v ASP.NET Core aplikaci (od .NET 6) obvykle konfiguruje Dependency Injection a Middleware?", "choices": ["A) V souboru Index.cshtml", "B) V souboru Program.cs", "C) V souboru Web.config", "D) V souboru Controller.cs"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Lambda výraz\" v jazyce C#?", "choices": ["A) Typ chyby, která nastane při kompilaci.", "B) Forma anonymní metody, která se často používá v LINQ dotazech.", "C) Speciální datový typ pro ukládání velkých čísel.", "D) Název pro metodu, která nemá žádné parametry."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jakou návratovou hodnotu má delegát typu Predicate<T>?", "choices": ["A) void (nic nevrací)", "B) int", "C) bool", "D) Vrací typ T"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Který z následujících delegátů NEMAJÍ návratovou hodnotu (vrací void)?", "choices": ["A) Func<T>", "B) Action<T>", "C) Predicate<T>", "D) Query<T>"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělá LINQ metoda .Where()?", "choices": ["A) Seřadí prvky v kolekci.", "B) Vybere (projikuje) specifické vlastnosti objektů.", "C) Filtruje prvky kolekce na základě zadané podmínky.", "D) Spojí dvě kolekce dohromady."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Atributy v C# (např. [Obsolete]) slouží k:", "choices": ["A) Přidání doplňujících informací (metadat) k elementům kódu (třídy, metody).", "B) Zrychlení běhu cyklů.", "C) Automatickému mazání nepotřebných proměnných.", "D) Vytváření grafického rozhraní."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je to ORM (Object-Relational Mapping)?", "choices": ["A) Jazyk pro psaní stylů webových stránek.", "B) Technika umožňující pracovat s databází pomocí objektů v kódu místo psaní SQL dotazů.", "C) Nástroj pro správu verzí kódu (jako Git).", "D) Protokol pro přenos souborů."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží v Entity Framework Core \"Migrace\" (Migrations)?", "choices": ["A) K přesunu databáze z jednoho serveru na druhý fyzicky.", "B) K synchronizaci schématu databáze se změnami v datovém modelu (třídách) aplikace.", "C) K migraci uživatelů z jedné aplikace do druhé.", "D) K převodu kódu z C# do Java."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký atribut (Data Annotation) použijete, pokud chcete vlastnost označit jako primární klíč?", "choices": ["A) [Required]", "B) [Table]", "C) [Key]", "D) [ForeignKey]"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co znamená pojem \"Eager Loading\" v EF Core?", "choices": ["A) Data se načtou až ve chvíli, kdy k nim v kódu přistoupíme.", "B) Závislá data se načtou z databáze rovnou jako součást hlavního dotazu (např. pomocí .Include()).", "C) Data se načítají po malých částech (stránkování).", "D) Data se nikdy nenačítají z cache."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co se stane při zavolání příkazu ROLLBACK v rámci transakce?", "choices": ["A) Všechny změny provedené v transakci se trvale uloží.", "B) Všechny změny provedené v transakci se vrátí zpět (zruší se).", "C) Databáze se restartuje.", "D) Smaže se celá tabulka."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jakým znakem začíná Razor syntaxe (přechod z HTML do C#) v souborech .cshtml?", "choices": ["A) #", "B) $", "C) %", "D) @"], "correct": 3},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi ViewData a ViewBag?", "choices": ["A) ViewData je dynamický objekt, ViewBag je silně typovaný.", "B) ViewData je Dictionary (klíč-hodnota), ViewBag je dynamická vlastnost (wrapper nad ViewData).", "C) Neexistuje žádný rozdíl, jsou to synonyma.", "D) ViewBag se používá pouze v PHP, ViewData v C#."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží \"Tag Helpers\" v ASP.NET Core (např. asp-controller, asp-action)?", "choices": ["A) K definování CSS stylů přímo v C# kódu.", "B) Pomáhají generovat HTML atributy (např. odkazy) na straně serveru a vypadají jako standardní HTML atributy.", "C) Slouží k psaní Javascriptu v C#.", "D) Nahrazují databázové dotazy."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co reprezentuje soubor _Layout.cshtml?", "choices": ["A) Chybovou stránku aplikace.", "B) Šablonu (layout) obsahující společnou část UI (hlavička, patička), do které se vkládají jednotlivé Views.", "C) Konfigurační soubor pro připojení k databázi.", "D) Skript pro minimalizaci CSS."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělá HTML helper @Html.DisplayFor(model => model.Name)?", "choices": ["A) Zobrazí editační pole (input) pro vlastnost Name.", "B) Vyrenderuje hodnotu vlastnosti Name jako prostý text (nebo dle šablony).", "C) Vymaže vlastnost Name z databáze.", "D) Zobrazí název vlastnosti (\"Name\"), nikoliv její hodnotu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená písmeno \"S\" ve zkratce SOLID?", "choices": ["A) Simple Class Principle", "B) Static Method Principle", "C) Single Responsibility Principle", "D) Source Control Principle"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co říká \"Dependency Inversion Principle\" (DIP)?", "choices": ["A) Třídy by měly záviset na konkrétních implementacích, ne na abstrakcích.", "B) Vysokoúrovňové moduly by neměly záviset na nízkoúrovňových modulech; oba by měly záviset na abstrakcích.", "C) Všechny proměnné musí být deklarovány jako private.", "D) Databáze by měla být závislá na uživatelském rozhraní."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jak se chová služba registrovaná v DI kontejneru jako \"Transient\"?", "choices": ["A) Je vytvořena pouze jednou pro celou dobu běhu aplikace (Singleton).", "B) Je vytvořena jednou pro každý HTTP požadavek (Scoped).", "C) Je vytvořena nová instance pokaždé, když je vyžádána.", "D) Je vytvořena pouze při startu serveru a pak smazána."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jaký je hlavní účel návrhového vzoru \"Repository\"?", "choices": ["A) Abstrakce přístupu k datům, která odděluje doménovou logiku od detailů databázového přístupu.", "B) Vytváření grafického rozhraní pro databázi.", "C) Logování chyb do textového souboru.", "D) Automatické generování hesel uživatelů."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Která vrstva v N-vrstvé architektuře obvykle obsahuje \"Entity\" a \"Doménové služby\"?", "choices": ["A) Presentation Layer", "B) Infrastructure Layer", "C) Domain Layer", "D) Client Application"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Proč je nezbytné provádět validaci dat na straně serveru (Server-Side), i když máme validaci na klientovi?", "choices": ["A) Protože validace na klientovi (JavaScript) se dá snadno obejít nebo vypnout.", "B) Protože server je rychlejší než prohlížeč.", "C) Není to nezbytné, stačí validace na klientovi.", "D) Aby server spotřeboval více energie."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Autentizací a Autorizací?", "choices": ["A) Autentizace ověřuje \"kdo jste\", Autorizace ověřuje \"co smíte dělat\".", "B) Autentizace ověřuje práva, Autorizace ověřuje identitu.", "C) Jsou to synonyma pro stejnou věc.", "D) Autentizace se používá u SQL, Autorizace u NoSQL."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží atribut [Authorize] umístěný nad Controllerem?", "choices": ["A) Povolí přístup pouze anonymním uživatelům.", "B) Omezí přístup k metodám controlleru pouze pro přihlášené uživatele.", "C) Automaticky přihlásí každého návštěvníka jako Admina.", "D) Zablokuje přístup k databázi."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jakou třídu poskytuje ASP.NET Core Identity jako výchozí pro reprezentaci uživatele?", "choices": ["A) AppUser", "B) IdentityUser", "C) SystemUser", "D) WebUser"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"DTO\" (Data Transfer Object)?", "choices": ["A) Objekt sloužící k přenosu dat mezi procesy nebo vrstvami, který neobsahuje business logiku.", "B) Protokol pro přenos souborů v síti.", "C) Typ databáze od firmy Oracle.", "D) Nástroj pro testování výkonu aplikace."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jakou metodu použijete v LINQ dotazu pro \"Eager Loading\" (načtení závislých dat rovnou s hlavní entitou)?", "choices": ["A) .Load()", "B) .Include()", "C) .Join()", "D) .Attach()"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží metoda .AsNoTracking() v Entity Framework Core?", "choices": ["A) Smaže data z databáze bez možnosti obnovy.", "B) Zrychlí dotazy pro čtení tím, že EF nebude sledovat změny v načtených entitách.", "C) Zastaví sledování chyb v aplikaci.", "D) Umožní vkládání dat bez kontroly primárního klíče."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co v kontextu EF Core znamená \"Lazy Loading\"?", "choices": ["A) Data se načítají automaticky až ve chvíli, kdy přistoupíme k navigační vlastnosti (např. product.Orders).", "B) Data se načítají velmi pomalu kvůli chybě v síti.", "C) Data se načtou všechna najednou při startu aplikace.", "D) Je to technika pro odložení startu databázového serveru."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaký je výchozí stav \"Trackování\" (sledování změn) entit v EF Core při běžném dotazu?", "choices": ["A) Vypnuté (NoTracking).", "B) Zapnuté – EF sleduje změny a při SaveChanges() je promítne do DB.", "C) Zapnuté pouze pro operaci DELETE.", "D) EF Core neumí sledovat změny entit."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Která metoda slouží k uložení všech sledovaných změn (INSERT, UPDATE, DELETE) do databáze?", "choices": ["A) context.UpdateDatabase()", "B) context.PushChanges()", "C) context.SaveChanges()", "D) context.Commit()"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jaký je hlavní rozdíl mezi HTML Helpery (např. @Html.TextBoxFor) a Tag Helpery (např. asp-for)?", "choices": ["A) Tag Helpery vypadají jako standardní HTML atributy, zatímco HTML Helpery jsou volání C# metod.", "B) HTML Helpery jsou novější a doporučované, Tag Helpery jsou zastaralé.", "C) Tag Helpery fungují pouze v prohlížeči, HTML Helpery na serveru.", "D) Není mezi nimi žádný rozdíl."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co udělá příkaz @RenderBody() v souboru _Layout.cshtml?", "choices": ["A) Vykreslí hlavičku a patičku stránky.", "B) Na toto místo se vloží obsah konkrétního View (stránky), které používá tento layout.", "C) Vymaže veškerý obsah stránky.", "D) Zobrazí tělo e-mailové zprávy."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jak v Razor View (např. v .cshtml) zapíšete explicitní C# výraz, aby se vyhodnotil a vypsal?", "choices": ["A) $( DateTime.Now )", "B) {{ DateTime.Now }}", "C) @( DateTime.Now )", "D) # DateTime.Now"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Partial View\"?", "choices": ["A) Neúplně načtená stránka kvůli chybě internetu.", "B) Samostatný soubor (View) obsahující část UI, který lze znovupoužít a vložit do jiných Views.", "C) Speciální pohled pouze pro administrátory.", "D) View, které nemá přístup k Modelu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jakým způsobem definujete sekci (např. pro skripty) v Layoutu, kterou pak mohou jednotlivé stránky naplnit?", "choices": ["A) @DefineSection(\"Scripts\")", "B) @RenderSection(\"Scripts\", required: false)", "C) <section name=\"Scripts\" />", "D) @Include(\"Scripts\")"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co říká \"Open/Closed Principle\" (OCP)?", "choices": ["A) Kód by měl být otevřen pro rozšíření, ale uzavřen pro změny (modifikace existujícího kódu).", "B) Databázové spojení má být otevřeno co nejdéle.", "C) Třídy by měly mít pouze veřejné (open) metody, žádné privátní (closed).", "D) Aplikace by měla být open-source."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co porušuje \"Liskov Substitution Principle\" (LSP)?", "choices": ["A) Pokud potomek (zděděná třída) nemůže plně nahradit svého předka bez změny funkčnosti programu (např. Čtverec dědící z Obdélníku, který mění chování rozměrů).", "B) Pokud třída nemá konstruktor.", "C) Pokud metoda vrací void.", "D) Pokud používáme příliš mnoho rozhraní."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co znamená \"Interface Segregation Principle\" (ISP)?", "choices": ["A) Je lepší mít jedno obrovské rozhraní pro celou aplikaci.", "B) Klienti by neměli být nuceni záviset na rozhraních, která nepoužívají (lépe více malých specifických rozhraní než jedno velké).", "C) Rozhraní by měla být vždy privátní.é", "D) Každá třída musí implementovat alespoň 5 rozhraní."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký problém řeší \"Dependency Inversion Principle\" (DIP)?", "choices": ["A) Zabraňuje tomu, aby vysokoúrovňové moduly závisely přímo na nízkoúrovňových modulech (oba mají záviset na abstrakci).", "B) Otáčí pořadí provádění cyklů.", "C) Zajišťuje, že databáze je vytvořena dříve než kód.", "D) Slouží k inverzi barev na webové stránce."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi životním cyklem \"Singleton\" a \"Scoped\" v DI?", "choices": ["A) Singleton se vytváří pro každý požadavek znovu, Scoped je jeden pro celou aplikaci.", "B) Singleton je jedna instance pro celou dobu běhu aplikace, Scoped je jedna instance pro jeden HTTP požadavek.", "C) Scoped se používá jen pro databáze, Singleton pro logování.", "D) Není v nich rozdíl."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená životní cyklus služby \"Transient\"?", "choices": ["A) Služba je vytvořena pouze jednou při startu aplikace.", "B) Služba je vytvořena nově pokaždé, když si ji někdo vyžádá (i v rámci jednoho requestu).", "C) Služba se ukládá na disk.", "D) Služba existuje pouze 5 sekund."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Kde se v ASP.NET Core (tradičně) registrují služby pro Dependency Injection?", "choices": ["A) V metodě ConfigureServices ve třídě Startup (nebo v builder.Services v Program.cs).", "B) V souboru appsettings.json.", "C) V HTML kódu.", "D) V databázi."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Která vrstva v N-vrstvé architektuře (podle DDD) obsahuje Entity a business pravidla?", "choices": ["A) Presentation Layer (Prezentační vrstva)", "B) Infrastructure Layer (Infrastruktura)", "C) Domain Layer (Doménová vrstva)", "D) Distributed Services Layer"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co je typickým úkolem vrstvy \"Infrastructure Layer\"?", "choices": ["A) Vykreslování tlačítek pro uživatele.", "B) Implementace repozitářů, přístup k databázi (EF Core), odesílání emailů.", "C) Definice rozhraní IUser.", "D) Routování URL adres."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží \"Application Layer\"?", "choices": ["A) Obsahuje logiku specifickou pro aplikaci, řídí tok dat mezi UI a doménou, často pracuje s DTO.", "B) Je to místo, kde se instaluje Visual Studio.", "C) Ukládá data fyzicky na pevný disk.", "D) Generuje HTML kód."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Proč používáme vzor \"Repository\"?", "choices": ["A) Abychom mohli psát SQL dotazy přímo v Controlleru.", "B) Pro abstrakci přístupu k datům – odděluje doménovou logiku od konkrétní technologie ukládání dat (např. DB).", "C) Aby aplikace běžela pomaleji.", "D) Je to vzor pro tvorbu uživatelského rozhraní."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je účel vzoru \"Unit of Work\"?", "choices": ["A) Měřit čas práce programátora.", "B) Sdružovat více operací repozitářů do jedné transakce (buď se uloží vše, nebo nic).", "C) Nahradit databázi textovým souborem.", "D) Slouží k testování jednotlivých metod (Unit Testing)."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Kde jsou uloženy výsledky validace modelu v Controlleru?", "choices": ["A) V objektu ViewBag.", "B) V property ModelState.", "C) V souboru cookies.", "D) V databázi."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jak zkontrolujete v Controlleru, zda jsou data odeslaná z formuláře validní?", "choices": ["A) if (Model.IsGood)", "B) if (ModelState.IsValid)", "C) if (CheckData(Model))", "D) if (Valid == true)"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co zajistí validační atribut [Required] nad vlastností modelu?", "choices": ["A) Vlastnost musí být unikátní v databázi.", "B) Vlastnost nesmí být null (je povinná).", "C) Vlastnost musí být číslo.", "D) Vlastnost se automaticky vyplní."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží knihovna \"FluentValidation\"?", "choices": ["A) K plynulému přehrávání videí.", "B) K definici validačních pravidel pomocí Fluent API odděleně od modelu (např. v samostatné třídě).", "C) K validaci CSS stylů.", "D) Je to náhrada za Entity Framework."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Proč nestačí pouze validace na straně klienta (Client-Side)?", "choices": ["A) Protože Javascript může být u klienta vypnutý nebo může útočník validaci obejít a poslat škodlivá data přímo na server.", "B) Protože validace na serveru je hezčí.", "C) Protože klient nemá dostatečný výkon.", "D) Stačí pouze klientská validace, serverová není potřeba."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Která třída v ASP.NET Core Identity slouží primárně k ověřování hesel a přihlašování uživatele?", "choices": ["A) UserManager", "B) SignInManager", "C) RoleManager", "D) AuthManager"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělá atribut [Authorize] umístěný nad akční metodou?", "choices": ["A) Povolí přístup komukoliv (i nepřihlášeným).", "B) Omezí přístup pouze pro autentizované (přihlášené) uživatele.", "C) Zmaže uživatelský účet.", "D) Automaticky uživatele odhlásí."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Autentizací a Autorizací?", "choices": ["A) Autentizace ověřuje identitu (kdo jsem), Autorizace ověřuje oprávnění (co smím dělat).", "B) Autentizace je pro web, Autorizace pro desktop.", "C) Autorizace ověřuje heslo, Autentizace ověřuje roli.", "D) Jsou to synonyma."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je hlavním úkolem Web API v architektuře aplikace?", "choices": ["A) Poskytovat grafické uživatelské rozhraní (GUI) pro koncové uživatele.", "B) Poskytovat služby a data aplikacím (webovým, mobilním, desktopovým) bez grafického rozhraní, obvykle ve formátu JSON.", "C) Generovat HTML stránky pomocí Razor syntaxe.", "D) Spravovat fyzické připojení k databázovému serveru."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Která HTTP metoda se v REST API obvykle používá pro vytvoření nového záznamu?", "choices": ["A) GET", "B) PUT", "C) POST", "D) DELETE"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi metodami PUT a PATCH?", "choices": ["A) PUT aktualizuje celý záznam (všechna data), PATCH aktualizuje jen část záznamu (částečná aktualizace).", "B) PUT je pro čtení, PATCH pro zápis.", "C) PATCH je starší verze PUT a už se nepoužívá.", "D) Není mezi nimi žádný rozdíl."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží atribut [ApiController] umístěný nad třídou Controlleru?", "choices": ["A) Automaticky vygeneruje dokumentaci ve Wordu.", "B) Zjednodušuje vývoj API tím, že aktivuje specifická chování (např. automatické validace modelu, odpovědi 400 Bad Request, bindování z body).", "C) Zakazuje přístup k API z jiných domén.", "D) Mění formát odpovědi z JSON na XML."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená stavový kód HTTP 404?", "choices": ["A) OK (Požadavek byl úspěšně vyřízen).", "B) Unauthorized (Uživatel není přihlášen).", "C) Not Found (Požadovaný zdroj nebyl nalezen).", "D) Internal Server Error (Chyba na serveru)."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co je to Swagger (OpenAPI)?", "choices": ["A) Nástroj pro automatické generování dokumentace a testování Web API.", "B) Nový programovací jazyk od Google.", "C) Databázový systém pro ukládání logů.", "D) Knihovna pro stylování CSS."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaký je hlavní účel použití DTO (Data Transfer Object) ve Web API?", "choices": ["A) Zrychlení připojení k internetu.", "B) Oddělení interního datového modelu (entit) od dat posílaných klientovi (skrytí citlivých dat, zjednodušení struktury).", "C) Náhrada za SQL databázi.", "D) Validace uživatelského hesla."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jakým atributem v metodě Controlleru určíte, že data přicházejí v těle požadavku (body)?", "choices": ["A) [FromUri]", "B) [FromBody]", "C) [FromHeader]", "D) [FromDisk]"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená zkratka AJAX?", "choices": ["A) Asynchronous Java And XHTML", "B) Asynchronous JavaScript And XML", "C) Advanced JSON And XML", "D) Automated Java Application X"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží v JavaScriptu objekt XMLHttpRequest nebo novější fetch?", "choices": ["A) K asynchronnímu zasílání dotazů na server bez nutnosti obnovit celou stránku.", "B) K vykreslování 3D grafiky v prohlížeči.", "C) K ukládání souborů na disk uživatele.", "D) K ukončení prohlížeče."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Proč se ve Web API a controllerech často používají klíčová slova async a await?", "choices": ["A) Aby kód vypadal moderněji.", "B) Aby se uvolnilo vlákno (thread) po dobu čekání na I/O operaci (např. dotaz do databáze), což zvyšuje škálovatelnost serveru.", "C) Protože to vyžaduje prohlížeč Chrome.", "D) Aby se data ukládala do cache."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký návratový typ má obvykle asynchronní akční metoda v Controlleru?", "choices": ["A) void", "B) string", "C) Task<IActionResult> nebo Task<ActionResult<T>>", "D) AsyncResult"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Která úroveň logování (LogLevel) označuje nejvážnější chybu, která může způsobit pád aplikace?", "choices": ["A) Information", "B) Warning", "C) Critical", "D) Debug"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží \"Developer Exception Page\" v ASP.NET Core?", "choices": ["A) K zobrazení reklam vývojářům.", "B) K zobrazení detailních informací o chybě (Stack Trace) během vývoje pro snazší ladění.", "C) K automatické opravě chyb v kódu.", "D) K zobrazení \"Not Found\" stránky pro běžné uživatele."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jak zjistíme v kódu (např. ve Startup.cs nebo Program.cs), zda aplikace běží ve vývojovém prostředí?", "choices": ["A) env.IsDevelopment()", "B) env.IsProduction()", "C) System.IsDebug()", "D) Config.Mode == \"Dev\""], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Proč bychom neměli zobrazovat detailní chybové hlášky (Stack Trace) v produkčním prostředí?", "choices": ["A) Protože to zpomaluje aplikaci.", "B) Z bezpečnostních důvodů – detailní výpis může útočníkovi prozradit citlivé informace o struktuře aplikace.", "C) Protože uživatelé neumí anglicky.", "D) Není důvod, klidně se zobrazovat mohou."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký status kód vrací metoda NotFound() v Controlleru?", "choices": ["A) 200", "B) 301", "C) 404", "D) 500"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co je cílem \"Unit testů\" (Jednotkových testů)?", "choices": ["A) Otestovat celou aplikaci jako celek včetně databáze.", "B) Otestovat nejmenší testovatelnou část kódu (metodu, třídu) izolovaně od ostatních částí.", "C) Otestovat, zda se uživateli líbí grafika.", "D) Změřit rychlost internetového připojení."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží \"Mocking\" (např. knihovna Moq) při testování?", "choices": ["A) K vysmívání se špatnému kódu.", "B) K vytvoření \"falešných\" objektů (závislostí), které simulují chování skutečných objektů, aby bylo možné testovat třídu izolovaně.", "C) K nahrávání obrazovky během testu.", "D) K automatickému psaní kódu za programátora."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co testují \"Integrační testy\"?", "choices": ["A) Pouze pravopisné chyby v dokumentaci.", "B) Spolupráci dvou a více komponentu dohromady (např. Controller + Databáze).", "C) Pouze jednu metodu bez jakýchkoliv závislostí.", "D) Jestli jde zapnout počítač."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená metodika TDD (Test-Driven Development)?", "choices": ["A) Testy se píší až nakonec, když zbude čas.", "B) Vývoj řízený testy – nejdříve se napíše test (který selže), pak se napíše kód pro splnění testu, a nakonec se refaktoruje.", "C) Testování provádí pouze zákazník (Driver).", "D) Testování pomocí jízdy v autě."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená zkratka IaaS v kontextu cloudových služeb?", "choices": ["A) Internet as a Service", "B) Infrastructure as a Service (Infrastruktura jako služba – pronájem virtuálních strojů, sítí).", "C) Information as a Source", "D) Identity as a Security"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená PaaS?", "choices": ["A) Platform as a Service (Platforma jako služba – např. Azure App Service, kde nespravuji OS, ale jen nasazuji aplikaci).", "B) Payment as a Service.", "C) Programming as a Skill.", "D) Public area at School."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaká je hlavní výhoda \"Serverless\" architektury (např. Azure Functions)?", "choices": ["A) Aplikace běží bez jakéhokoliv hardwaru (ve vzduchoprázdnu).", "B) Platíte pouze za skutečný čas/výkon, kdy kód běží (event-driven), a nemusíte spravovat žádné servery.", "C) Serverless znamená, že nepotřebujete internet.", "D) Je to zastaralá technologie."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Docker\" (Kontejnerizace)?", "choices": ["A) Program na úpravu fotek.", "B) Technologie umožňující zabalit aplikaci se všemi jejími závislostmi do kontejneru, který běží stejně na jakémkoliv prostředí.", "C) Cloudová služba od Amazonu pro doručování balíků.", "D) Nový typ databáze."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je \"Minifikace\" (Minification) JavaScriptu nebo CSS?", "choices": ["A) Zvětšení obrázků na stránce.", "B) Proces odstranění zbytečných znaků (mezer, komentářů) a zkrácení názvů proměnných pro zmenšení velikosti souboru a rychlejší načítání.", "C) Přepis kódů do jazyka C++.", "D) Změna barvy písma na černou."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je úkolem \"Load Balanceru\" v cloudu?", "choices": ["A) Vyvažovat (rozdělovat) příchozí síťový provoz mezi více serverů, aby nedošlo k přetížení jednoho z nich.", "B) Měřit váhu serverů.", "C) Zálohovat data na pásky.", "D) Blokovat reklamy."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Který cloudový poskytovatel patří společnosti Microsoft?", "choices": ["A) AWS (Amazon Web Services)", "B) Google Cloud Platform", "C) Azure", "D) IBM Cloud"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co znamená pojem \"Autoscaling\"?", "choices": ["A) Automatická oprava chyb v kódu.", "B) Automatické navýšení nebo snížení počtu běžících instancí (nebo výkonu) podle aktuální zátěže aplikace.", "C) Automatické odesílání e-mailů.", "D) Automatické restartování počítače každou hodinu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Health Check\" endpoint v aplikaci?", "choices": ["A) Stránka s radami pro zdravý životní styl.", "B) Speciální URL adresa, kterou cloudová služba pravidelně volá, aby zjistila, zda aplikace běží a je schopna odpovídat (\"je zdravá\").", "C) Antivirová kontrola souborů.", "D) Kontrola pravopisu v textech."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Middleware\" v ASP.NET Core?", "choices": ["A) Software pro grafický návrh webu.", "B) Komponenta (kus kódu), která je součástí pipeline (potrubí) zpracování HTTP požadavku a odpovědi.", "C) Hardware, který propojuje server a klienta.", "D) Antivirový program běžící na pozadí."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Záleží na pořadí, v jakém jsou Middleware komponenty registrovány v Program.cs?", "choices": ["A) Ne, na pořadí nezáleží, spouštějí se paralelně.", "B) Ano, pořadí je kritické – komponenty se vykonávají v tom pořadí, v jakém jsou přidány (request), a v opačném pořadí při návratu (response).", "C) Záleží na pořadí pouze u Windows Serveru.", "D) Pořadí určuje náhoda."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi app.Use(...) a app.Run(...)?", "choices": ["A) app.Run přidá middleware na konec pipeline a ukončí ji (nepředá řízení dál), app.Use může předat řízení dalšímu middleware.", "B) app.Use se používá pro databáze, app.Run pro grafiku.", "C) app.Run je zastaralé a nepoužívá se.", "D) Není mezi nimi žádný rozdíl."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co dělá middleware app.UseStaticFiles()?", "choices": ["A) Umožňuje aplikaci servírovat statické soubory (obrázky, CSS, JS) ze složky wwwroot.", "B) Zakazuje stahování souborů.", "C) Komprimuje statické soubory do ZIP archivu.", "D) Převede všechny soubory na PDF."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co se stane, pokud v pipeline nastane výjimka a není zaregistrován middleware UseExceptionHandler nebo UseDeveloperExceptionPage?", "choices": ["A) Aplikace spadne a klientovi se vrátí prázdná odpověď nebo obecná chyba 500 bez detailů.", "B) Server automaticky restartuje aplikaci a chybu opraví.", "C) Klientovi se zobrazí modrá obrazovka smrti.", "D) Výjimka se ignoruje a program běží dál."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jak vypadá výchozí (konvenční) šablona routy v ASP.NET Core MVC?", "choices": ["A) {controller=Home}/{action=Index}/{id?}", "B) {action}/{controller}/{id}", "C) {table}/{row}/{column}", "D) {api}/{key}/{value}"], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co znamená otazník v parametru routy {id?}?", "choices": ["A) Že parametr je povinný a musí být číslo.", "B) Že parametr je volitelný (nemusí být v URL uveden).", "C) Že parametr obsahuje tajnou informaci.", "D) Že se jedná o dotaz do databáze."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Atributové routování\" (Attribute Routing)?", "choices": ["A) Definování rout pomocí atributů [Route(\"...\")] nebo [HttpGet(\"...\")] přímo nad metodami a controllery.", "B) Routování podle barvy atributů v HTML.", "C) Zastaralý způsob routování z roku 1990.", "D) Náhodné generování URL adres."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jak zajistíte, aby parametr v URL byl chápán pouze jako celé číslo (např. /Product/Detail/5)?", "choices": ["A) Použitím constraintu (omezení): {id:int}.", "B) Napsáním komentáře do kódu.", "C) Nelze to zajistit, URL je vždy text.", "D) Použitím regulárního výrazu v HTML."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Protokol HTTP je \"stateless\" (bezstavový). Co to znamená?", "choices": ["A) Server si nepamatuje žádné informace o předchozích požadavcích klienta; každý požadavek je zpracován izolovaně.", "B) Server neustále sleduje polohu uživatele.", "C) Server funguje bez operačního systému.", "D) Aplikace nemá žádnou domovskou stránku."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Kde jsou uložena data v Session (Server-side session)?", "choices": ["A) V prohlížeči uživatele v textovém souboru.", "B) V URL adrese.", "C) Na straně serveru (v paměti nebo v distribuované cache), identifikovaná pomocí ID v cookie.", "D) Na grafické kartě serveru."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Session a Cookie?", "choices": ["A) Cookie se ukládá u klienta (prohlížeč), Session data jsou na serveru.", "B) Cookie je pro text, Session pro obrázky.", "C) Session je trvalá, Cookie se po zavření prohlížeče vždy smaže.", "D) Není rozdíl, jsou to synonyma."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží TempData v MVC Controlleru?", "choices": ["A) K trvalému uložení dat do databáze.", "B) K přenosu dat mezi dvěma po sobě jdoucími požadavky (např. při přesměrování/Redirect), poté data zmizí.", "C) K uložení teploty procesoru.", "D) K logování chyb."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělají \"Action Filters\" (Filtry akcí)?", "choices": ["A) Umožňují spustit kód před a po vykonání akční metody (např. pro logování nebo úpravu dat).", "B) Filtrují prach v serverovně.", "C) Mění barvu tlačítek na stránce.", "D) Mažou nevhodná slova z databáze."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Který filtr se používá k ošetření neočekávaných chyb v celé aplikaci nebo controlleru?", "choices": ["A) ActionFilter", "B) ResourceFilter", "C) ExceptionFilter", "D) ResultFilter"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Extension Method\" (Rozšiřující metoda)?", "choices": ["A) Metoda, která prodlužuje běh programu.", "B) Statická metoda ve statické třídě, která používá klíčové slovo this u prvního parametru, čímž \"přidává\" metodu k existujícímu typu.", "C) Metoda pro zvětšení písma.", "D) Externí plugin do Visual Studia."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená operátor ?? (Null-coalescing operator) v C#?", "choices": ["A) Vrací levou stranu, pokud není null; jinak vrací pravou stranu (např. A ?? B).", "B) Porovnává dvě hodnoty.", "C) Znamená \"přibližně rovno\".", "D) Označuje komentář."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží klíčové slovo using (např. using (var x = new ...)) před zavedením using declaration?", "choices": ["A) K importu jmenných prostorů (namespaces).", "B) K zajištění, že objekt implementující IDisposable bude na konci bloku správně uvolněn (zavolána metoda Dispose).", "C) K použití cizího kódu bez licence.", "D) K definování uživatelského jména."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Nullable Reference Type\" (např. string?) zavedený v novějších verzích C#?", "choices": ["A) Typ, který nemůže nikdy obsahovat hodnotu.", "B) Explicitní vyjádření, že proměnná může nabývat hodnoty null (kompilátor pak hlídá možný NullReferenceException).", "C) Chyba v kompilátoru.", "D) Typ pro ukládání pouze otazníků."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to útok XSS (Cross-Site Scripting)?", "choices": ["A) Útočník vloží do stránky škodlivý JavaScript, který se spustí v prohlížeči oběti (např. ukradne cookies).", "B) Útočník se nabourá do serverovny fyzicky.", "C) Útočník smaže CSS styly stránky.", "D) Útočník přetíží server velkým množstvím dotazů."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jak Razor (View Engine) brání proti XSS útokům při výpisu @Model.Text?", "choices": ["A) Nebrání nijak.", "B) Automaticky HTML-enkóduje vypisovaný text (převede znaky jako < na <), takže se nespustí jako skript.", "C) Zablokuje uživatele.", "D) Převede text na obrázek."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to útok CSRF/XSRF (Cross-Site Request Forgery)?", "choices": ["A) Falšování identity serveru.", "B) Útok, kdy útočník donutí prohlížeč přihlášeného uživatele odeslat nechtěný požadavek (např. převod peněz) na zranitelný web.", "C) Krádež hesla pomocí kamery.", "D) Útok na Wi-Fi síť."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jak se v ASP.NET Core MVC bráníme proti CSRF?", "choices": ["A) Pomocí \"y Tokenu\" (skrytého pole ve formuláři a cookie), který server ověřuje.", "B) Vypnutím JavaScriptu.", "C) Používáním pouze metody GET.", "D) Nepoužíváním formulářů."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Která knihovna v ASP.NET Core slouží pro komunikaci v reálném čase (Real-time web)?", "choices": ["A) SignalR", "B) React", "C) Angular", "D) RealTimeSharp"], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Hub\" v kontextu SignalR?", "choices": ["A) Síťový rozbočovač (hardware).", "B) Třída na serveru, která spravuje připojení klientů a umožňuje volání metod na klientech (RPC).", "C) Databázová tabulka.", "D) Název pro USB port."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělá [BindProperty] v Razor Pages?", "choices": ["A) Svazuje hodnotu z HTTP požadavku (např. formuláře) s vlastností ve třídě PageModel.", "B) Lepí stránky k sobě.", "C) Zvyšuje bezpečnost hesla.", "D) Formátuje datum a čas."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi SQL a NoSQL databází?", "choices": ["A) SQL je relační (tabulky, pevné schéma), NoSQL je nerelační (dokumenty, flexibilní schéma).", "B) SQL je zdarma, NoSQL je placené.", "C) SQL nepodporuje transakce, NoSQL ano.", "D) NoSQL se používá pouze offline."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Cache\" (Mezipaměť)?", "choices": ["A) Místo pro ukládání dočasných dat pro rychlejší přístup při opakovaném použití.", "B) Peníze v hotovosti.", "C) Typ procesoru.", "D) Program na mazání virů."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží formát JSON?", "choices": ["A) K formátování textu ve Wordu.", "B) K výměně dat mezi serverem a klientem (textový formát založený na syntaxi objektů JavaScriptu).", "C) K přehrávání videa.", "D) K definici barev na webu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená stavový kód HTTP 500?", "choices": ["A) Not Found.", "B) Forbidden.", "C) Internal Server Error (Chyba na straně serveru).", "D) OK."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Který soubor slouží jako hlavní místo pro aplikační konfiguraci (např. Connection String) v ASP.NET Core?", "choices": ["A) web.config", "B) global.asax", "C) appsettings.json", "D) config.xml"], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jak v kódu (např. v Controlleru) získáte hodnotu z konfiguračního souboru?", "choices": ["A) Pomocí System.Configuration.Manager.", "B) Injektováním rozhraní IConfiguration a zavoláním _config[\"Klic\"].", "C) Přečtením souboru pomocí File.ReadAllText.", "D) Hodnoty se načítají samy do proměnných."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je účel vzoru IOptions<T>?", "choices": ["A) Umožňuje mapovat sekce z appsettings.json do silně typovaných C# tříd (POCO) a ty pak injektovat pomocí DI.", "B) Slouží k výběru možností v HTML select boxu.", "C) Je to náhrada za databázi.", "D) Slouží k nastavení barvy pozadí aplikace."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Kestrel\"?", "choices": ["A) Webový prohlížeč.", "B) Lehký, open-source, multiplatformní webový server, který je výchozím serverem pro ASP.NET Core.", "C) Název databázového enginu.", "D) Grafický editor pro Visual Studio."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Proč se v produkci často používá Kestrel za \"Reverse Proxy\" serverem (jako je IIS, Nginx nebo Apache)?", "choices": ["A) Kestrel neumí běžet sám.", "B) Reverse Proxy poskytuje lepší zabezpečení, správu SSL certifikátů, kompresi a omezování požadavků, což Kestrel v základu neřeší tak robustně.", "C) Aby byla aplikace pomalejší.", "D) Není to pravda, Kestrel se vždy používá napřímo vystavený do internetu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je zásadní rozdíl mezi IEnumerable<T> a IQueryable<T> při práci s databází (EF Core)?", "choices": ["A) IEnumerable provádí filtraci až v paměti aplikace (načte všechna data z DB), IQueryable sestavuje SQL dotaz a filtraci provádí na databázovém serveru.", "B) IQueryable je starší a pomalejší.", "C) IEnumerable neumí pracovat s čísly.", "D) Není mezi nimi rozdíl."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co se stane, když v LINQ dotazu zapomenete zavolat metodu jako .ToList(), .Count() nebo .First()?", "choices": ["A) Dotaz se okamžitě provede.", "B) Dotaz se neprovede (Deferred Execution) – definice dotazu se pouze uloží do proměnné, ale data se z databáze nenačtou.", "C) Vyhodí se výjimka.", "D) Smažou se data v tabulce."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"SQL Injection\"?", "choices": ["A) Způsob optimalizace SQL dotazů.", "B) Bezpečnostní chyba, kdy útočník vloží škodlivý SQL kód do vstupního pole formuláře, který se pak spustí na databázi.", "C) Instalace SQL serveru.", "D) Vkládání dat do tabulky pomocí Excelu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jak se v EF Core nejlépe bránit proti SQL Injection?", "choices": ["A) Používáním string.Format pro skládání dotazů.", "B) Používáním LINQ metod nebo parametrizovaných dotazů (EF Core toto dělá automaticky).", "C) Vypnutím firewallu.", "D) Psaním dotazů pouze velkými písmeny."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Kdy by měl server vrátit status kód 201 Created?", "choices": ["A) Vždy, když server běží.", "B) Po úspěšném dokončení metody POST, která vytvořila nový zdroj (záznam).", "C) Když dojde k chybě serveru.", "D) Při smazání záznamu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"CORS\" (Cross-Origin Resource Sharing)?", "choices": ["A) Mechanismus prohlížeče, který blokuje nebo povoluje požadavky na zdroje z jiné domény, než ze které aplikace běží.", "B) Sdílení procesorového času mezi jádry.", "C) Typ písma na webu.", "D) Knihovna pro animace."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je to \"JWT\" (JSON Web Token)?", "choices": ["A) Formát pro ukládání obrázků.", "B) Kompaktní a bezpečný způsob přenosu informací mezi stranami jako JSON objekt, často používaný pro bezstavovou autentizaci v Single Page Aplikacích (SPA) a Web API.", "C) Programovací jazyk Java Web Tools.", "D) Nástroj pro kompresi souborů."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi parametry [FromQuery] a [FromRoute] v Controlleru?", "choices": ["A) [FromRoute] bere data z části URL cesty (např. /api/users/5), [FromQuery] bere data z parametrů za otazníkem (např. ?id=5).", "B) [FromQuery] je pro čísla, [FromRoute] pro text.", "C) Není rozdíl, fungují stejně.", "D) [FromRoute] se používá pouze pro obrázky."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "K čemu slouží datový typ record zavedený v C# 9?", "choices": ["A) K nahrávání zvuku.", "B) Pro definici referenčních typů, které jsou primárně určené k ukládání dat a poskytují immutabilitu (neměnnost) a porovnávání hodnot (value equality) automaticky.", "C) Je to starý typ pro databáze.", "D) Slouží k mazání souborů."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělá \"Garbage Collector\" (GC) v .NET?", "choices": ["A) Vybírá poplatky za software.", "B) Automaticky spravuje paměť – uvolňuje objekty, které již aplikace nepoužívá, aby nedošlo k vyčerpání paměti (Memory Leak).", "C) Sbírá logy chyb a posílá je Microsoftu.", "D) Organizuje soubory na disku."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi String a StringBuilder?", "choices": ["A) String je neměnný (immutable) – každá úprava vytvoří novou instanci. StringBuilder je měnný (mutable) a efektivnější pro časté spojování textu v cyklech.", "B) String je rychlejší ve všech případech.", "C) StringBuilder se používá pro čísla.", "D) String neexistuje v C#, používá se jen Text."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co znamená klíčové slovo var v C#?", "choices": ["A) Že proměnná nemá žádný typ (je dynamická).", "B) Že typ proměnné je statický, ale odvodí ho kompilátor automaticky podle přiřazené hodnoty (Implicit typing).", "C) Je to chyba syntaxe.", "D) Znamená \"Variable Access Rights\"."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"NuGet\"?", "choices": ["A) Čokoládová tyčinka pro programátory.", "B) Správce balíčků pro .NET, který umožňuje snadno stahovat a instalovat knihovny třetích stran do projektu.", "C) Nový operační systém.", "D) Název pro kompilátor C#."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená pojem \"Scaffolding\" ve Visual Studiu?", "choices": ["A) Stavba lešení kolem počítače.", "B) Automatické generování kódu (např. Controllerů a Views) na základě modelu a kontextu databáze.", "C) Formátování kódu do barev.", "D) Mazání projektu."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je úkolem souboru Program.cs v moderních .NET aplikacích (od verze 6)?", "choices": ["A) Obsahuje pouze komentáře.", "B) Je to vstupní bod aplikace, kde se vytváří WebApplicationBuilder, registrují služby (DI) a konfiguruje Middleware pipeline.", "C) Slouží k definici HTML stylů.", "D) Ukládá hesla uživatelů."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Blazor\"?", "choices": ["A) Framework pro tvorbu interaktivního webového UI pomocí C# místo JavaScriptu (běží na serveru nebo ve WebAssembly).", "B) Laserová tiskárna.", "C) Antivirový program.", "D) Nástroj na úpravu videa."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Proč je důležité používat verzovací systém (např. Git)?", "choices": ["A) Abychom mohli sledovat historii změn, spolupracovat v týmu a vrátit se k funkční verzi v případě chyby.", "B) Abychom zaplnili disk.", "C) Není to důležité, stačí zálohovat zkopírováním složky.", "D) Abychom měli hezčí ikonky souborů."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co znamená v C# klíčové slovo static u třídy?", "choices": ["A) Třída se nemůže pohybovat po obrazovce.", "B) Třídu nelze instanciovat (nevytváří se objekty new Trida()) a obsahuje pouze statické členy.", "C) Třída je smazána po vypnutí počítače.", "D) Třída je neviditelná."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Deadlock\" (Uváznutí)?", "choices": ["A) Situace, kdy dvě a více vláken čekají navzájem na uvolnění prostředků, které drží to druhé, a aplikace tak \"zamrzne\".", "B) Zámek na dveřích serverovny.", "C) Konec životnosti aplikace.", "D) Typ písma."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Debug a Release konfigurací sestavení (Build)?", "choices": ["A) Debug obsahuje ladicí informace a není optimalizován (pro vývoj), Release je plně optimalizován pro výkon (pro produkci).", "B) Debug je pro zákazníka, Release pro vývojáře.", "C) Release obsahuje viry.", "D) Není rozdíl."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je to \"Response Caching\"?", "choices": ["A) Ukládání vygenerované odpovědi (např. HTML stránky) do paměti, aby se při dalším stejném požadavku nemusela generovat znovu.", "B) Odpovídání na e-maily.", "C) Ukládání hesel.", "D) Zpomalení odezvy serveru."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co znamená zkratka API?", "choices": ["A) Application Programming Interface", "B) Advanced Program Internet", "C) All People Interface", "D) Apple Phone Iphone"], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Jaká metoda v DbContext se používá pro přímé spuštění surového SQL dotazu (např. pro složitý report)?", "choices": ["A) context.Database.ExecuteSqlRaw() nebo FromSqlRaw()", "B) context.Run()", "C) context.DoMagic()", "D) Nelze spustit SQL, musíme použít jen C#."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co je hlavním cílem \"Clean Architecture\" (Čisté architektury)?", "choices": ["A) Aby kód neobsahoval sprostá slova.", "B) Rozdělení aplikace do kruhových vrstev, kde vnitřní vrstvy (doména) nezávisí na vnějších (UI, DB), což zvyšuje testovatelnost a udržovatelnost.", "C) Používání pouze bílého pozadí v editoru.", "D) Aby aplikace neměla žádné soubory."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Kdo je \"Garantem\" předmětu zmíněným v úvodní prezentaci (z PDF)?", "choices": ["A) Bill Gates", "B) doc. Ing. Petr Šilhavý, Ph.D.", "C) FunTom of the Blue Screen", "D) Elon Musk"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Máte metodu async void DoSomething(). Co se stane, pokud v ní dojde k neošetřené výjimce?", "choices": ["A) Výjimka je zachycena v TaskScheduler.UnobservedTaskException.", "B) Výjimka „probublá“ nahoru a lze ji zachytit v bloku try-catch, který metodu zavolal.", "C) Výjimka shodí celý proces (aplikaci), protože async void nevrací Task, do kterého by se výjimka uložila, a nelze ji zvenčí odchytit.", "D) Nestane se nic, výjimka je tiše ignorována."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jaký je výsledek porovnání object.ReferenceEquals(str1, str2), pokud string str1 = \"test\" a string str2 = \"test\" (literály jsou definovány v kódu)?", "choices": ["A) False, protože každý string je nový objekt na haldě.", "B) True, díky mechanismu „String Interning“, který pro stejné literály používá stejnou paměťovou referenci.", "C) False, stringy jsou hodnotové typy.", "D) Chyba kompilace."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Kdy se zavolá statický konstruktor třídy (static MyClass())?", "choices": ["A) Při startu aplikace (v Main).", "B) Přesně v okamžiku, kdy Garbage Collector uvolňuje první instanci.", "C) Automaticky před vytvořením první instance této třídy nebo před prvním přístupem k jakémukoliv statickému členu.", "D) Musí se zavolat manuálně."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Co se stane, když v bloku try-catch-finally zavoláte v části try příkaz return?", "choices": ["A) Metoda okamžitě skončí a blok finally se nevykoná.", "B) Blok finally se vykoná ještě předtím, než metoda skutečně vrátí hodnotu a ukončí se.", "C) Kompilátor zahlásí chybu (nedosažitelný kód).", "D) Návratová hodnota bude null."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi const a readonly u pole ve třídě?", "choices": ["A) const je vyhodnoceno při kompilaci, readonly při běhu (v konstruktoru).", "B) Není rozdíl.", "C) readonly lze měnit kdykoliv, const jen jednou.", "D) const pole nelze použít pro referenční typy (kromě null/string), takže pole musí být readonly."], "correct": 0},
-  {"type": "mcq", "points": 1, "q": "Co se stane (v defaultním nastavení .NET Core v Developmentu), pokud do služby registrované jako Singleton injektujete službu registrovanou jako Scoped?", "choices": ["A) Nic zvláštního, bude to fungovat.", "B) Nastane „Captive Dependency“ a aplikace vyhodí výjimku při startu/prvním volání (Scope validation error).", "C) Scoped služba se automaticky povýší na Singleton.", "D) Singleton služba se poníží na Scoped."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Pokud zaregistrujete tutéž službu (rozhraní) do DI kontejneru třikrát za sebou a poté si vyžádáte v konstruktoru IEnumerable<IService>, co dostanete?", "choices": ["A) Chybu (Ambiguous Registration).", "B) Pouze poslední zaregistrovanou instanci.", "C) Všechny tři instance.", "D) Pouze první zaregistrovanou instanci."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Pokud si ale vyžádáte pouze jednu instanci IService (ne kolekci), kterou dostanete?", "choices": ["A) První zaregistrovanou.", "B) Poslední zaregistrovanou.", "C) Náhodnou.", "D) Vyhodí výjimku."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "V Program.cs máte pořadí: 1. app.UseAuthorization(), 2. app.UseAuthentication(). Co se stane?", "choices": ["A) Vše funguje normálně.", "B) Autorizace selže (nebo pustí každého), protože v době jejího běhu ještě nebyla identita uživatele ověřena.", "C) Middleware se automaticky seřadí správně sám.", "D) Aplikace nepůjde zkompilovat."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Máte middleware, který volá await _next(context) a POTÉ se snaží zapsat do Response. Co se stane, pokud už další middleware začal posílat data klientovi?", "choices": ["A) Hlavička se normálně přidá.", "B) Vyhodí se výjimka InvalidOperationException (Headers are read-only, response has already started).", "C) Hlavička se pošle v příštím requestu.", "D) Server spadne."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co se stane, pokud v Controlleru vyhodíte výjimku, ale nemáte zaregistrovaný žádný Exception Handler middleware?", "choices": ["A) Framework chybu spolkne a vrátí 200 OK.", "B) Prohlížeč zobrazí standardní chybovou stránku IIS/Kestrelu nebo prázdnou 500 (bez detailů).", "C) Server se restartuje.", "D) Zavolá se metoda OnError v Controlleru."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Použijete metodu dbSet.Find(id). Jak se liší od .FirstOrDefault(x => x.Id == id)?", "choices": ["A) Find je jen starší název pro FirstOrDefault.", "B) Find nejprve hledá entitu v lokální paměti (Change Trackeru). Pokud ji najde, neposílá dotaz do databáze.", "C) Find umí hledat jen podle stringů.", "D) FirstOrDefault je rychlejší, protože používá indexy."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Máte načtenou entitu s .AsNoTracking(). Poté změníte její vlastnost a zavoláte SaveChanges(). Co se stane?", "choices": ["A) Změna se uloží do DB.", "B) Nestane se nic (změna se neuloží), protože EF Core entitu nesleduje.", "C) Vyhodí se výjimka.", "D) Uloží se nový řádek (duplikát)."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co provede následující LINQ příkaz?", "choices": ["A) Efektivně vyfiltruje uživatele v databázi.", "B) Načte všechny uživatele se jménem „Admin“ do paměti a teprve tam filtruje podle věku.", "C) První ToList() se ignoruje.", "D) Nefunguje, nelze volat ToList() dvakrát."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co znamená „N+1 problém“ při načítání dat?", "choices": ["A) Chyba v cyklu, který běží N+1 krát.", "B) Načtení N entit jedním dotazem a poté N dalších dotazů při přístupu k navigační vlastnosti.", "C) Verze EF Core N+1.", "D) Problém s primárním klíčem."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl v chování IQueryable při použití IEnumerable proměnné?", "choices": ["A) Žádný.", "B) Filtrace se provede až v paměti (client-side), do DB se pošle SELECT *.", "C) Kód spadne.", "D) EF Core nepodporuje IEnumerable."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Dvě různé akce mají [Route(\"api/items\")]. Co se stane při GET /api/items?", "choices": ["A) Zavolá se první nalezená.", "B) Zavolá se poslední nalezená.", "C) Vyhodí se AmbiguousMatchException.", "D) ASP.NET Core náhodně vybere jednu."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi [FromBody] string a prostým string parametrem v POST metodě?", "choices": ["A) Žádný.", "B) Prostý string se hledá v Query/Route, [FromBody] čte celé tělo requestu.", "C) [FromBody] je povinné vždy.", "D) Prostý string nefunguje."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Je metoda HTTP POST idempotentní?", "choices": ["A) Ano.", "B) Ne.", "C) Ano, pokud vrací JSON.", "D) Záleží na prohlížeči."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co se stane, když v Razor View zavoláte @MyAsyncMethod() místo @await MyAsyncMethod()?", "choices": ["A) Vypíše se výsledek.", "B) Metoda se provede synchronně.", "C) Vypíše se objekt Task do HTML.", "D) Chyba kompilace."], "correct": 2},
-  {"type": "mcq", "points": 1, "q": "Třída implementuje IDisposable. Znamená to, že ji GC neumí uklidit?", "choices": ["A) Ano.", "B) Ne. GC ji uklidí, Dispose slouží k deterministickému uvolnění zdrojů.", "C) IDisposable nemá s GC nic společného.", "D) GC ji ignoruje."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co je to „Boxing“?", "choices": ["A) Docker kontejner.", "B) Převod Value Type na reference type s alokací na haldě.", "C) Komprese.", "D) HTML prvek."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Jaký je defaultní návratový Status Code metody Controlleru, která vrací void?", "choices": ["A) 200 OK", "B) 204 No Content", "C) 404 Not Found", "D) 201 Created"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Může mít struct bezparametrický konstruktor (před C# 10)?", "choices": ["A) Ano.", "B) Ne.", "C) Ano, ale privátní.", "D) Nemá konstruktory."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co vrátí Math.Round(2.5) v C#?", "choices": ["A) 3", "B) 2", "C) 2.5", "D) 0"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Který filtr v ASP.NET Core MVC pipeline se spustí jako první?", "choices": ["A) Action Filter", "B) Authorization Filter", "C) Resource Filter", "D) Exception Filter"], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co se stane, když v catch bloku použijete throw ex; místo throw;?", "choices": ["A) Nic.", "B) Ztratí se původní Stack Trace.", "C) Aplikace se ukončí.", "D) Je to rychlejší."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Je List<T> thread-safe?", "choices": ["A) Ano.", "B) Ne.", "C) Ano, pokud je T int.", "D) Ano, pokud použijeme lock jen při čtení."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Co dělá yield return?", "choices": ["A) Vrátí kolekci.", "B) Vrací prvky postupně (lazy evaluation).", "C) Zastaví program.", "D) Vrátí výnos."], "correct": 1},
-  {"type": "mcq", "points": 1, "q": "Může být statická třída generická?", "choices": ["A) Ne.", "B) Ano.", "C) Pouze pokud dědí z object.", "D) Ano, ale nesmí mít statické metody."], "correct": 1}
-];
-
-/** výsledná banka (bez duplicít) */
-const BANK = dedupeQuestions(BANK_RAW);
-
-const els = {
-  startBtn: document.getElementById("startBtn"),
-  restartBtn: document.getElementById("restartBtn"),
-  countInput: document.getElementById("countInput"),
-  bankInfo: document.getElementById("bankInfo"),
-
-  quizArea: document.getElementById("quizArea"),
-  resultArea: document.getElementById("resultArea"),
-
-  qIndex: document.getElementById("qIndex"),
-  qPoints: document.getElementById("qPoints"),
-  qType: document.getElementById("qType"),
-  questionText: document.getElementById("questionText"),
-
-  choices: document.getElementById("choices"),
-
-  feedback: document.getElementById("feedback"),
-
-  prevBtn: document.getElementById("prevBtn"),
-  nextBtn: document.getElementById("nextBtn"),
-  finishBtn: document.getElementById("finishBtn"),
-  progress: document.getElementById("progress"),
-
-  resultSummary: document.getElementById("resultSummary"),
-  missedBox: document.getElementById("missedBox"),
-  missedList: document.getElementById("missedList"),
-  reviewList: document.getElementById("reviewList"),
-};
-
-els.bankInfo.textContent = `Banka: ${BANK.length} otázok (výber náhodne).`;
-
-let test = [];
-let idx = 0;
-// marks: { status: "correct"|"wrong"|"unanswered", userChoice?: number }
-let marks = [];
-
-function clampInt(v, min, max) {
-  const n = Math.floor(Number(v));
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, n));
-}
-
-function startTest() {
-  const wanted = clampInt(els.countInput.value, 1, BANK.length);
-  els.countInput.value = String(wanted);
-
-  const pool = shuffle([...BANK]);
-  test = pool.slice(0, wanted);
-
-  idx = 0;
-  marks = test.map(() => ({ status: "unanswered" }));
-
-  els.resultArea.style.display = "none";
-  els.quizArea.style.display = "block";
-  els.restartBtn.disabled = false;
-
-  render();
-}
-
-function render() {
-  const q = test[idx];
-
-  els.qIndex.textContent = `Otázka ${idx + 1} / ${test.length}`;
-  els.qPoints.textContent = `Body: ${q.points ?? 1}`;
-  els.qType.textContent = "Výber z možností (A–D)";
-  els.questionText.textContent = q.q;
-
-  els.prevBtn.disabled = idx === 0;
-  els.nextBtn.disabled = idx === test.length - 1;
-
-  const answeredCount = marks.filter(m => m.status !== "unanswered").length;
-  els.progress.textContent = `Zodpovedané: ${answeredCount}/${test.length}`;
-
-  // render choices
-  els.choices.innerHTML = "";
-  const m = marks[idx];
-  (q.choices || []).forEach((ch, i) => {
-    const btn = document.createElement("button");
-    btn.className = "choiceBtn";
-    btn.type = "button";
-    btn.innerHTML = escapeHtml(ch);
-
-    // show marking if already answered
-    if (m.status !== "unanswered") {
-      if (i === q.correct) btn.classList.add("correct");
-      if (typeof m.userChoice === "number" && i === m.userChoice && i !== q.correct) btn.classList.add("wrong");
-      btn.disabled = true;
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    btn.addEventListener("click", () => pick(i));
-    els.choices.appendChild(btn);
-  });
+    body {
+      margin: 0;
+      background: #0b1020;
+      color: #e8ecff;
+    }
 
-  // feedback: správna odpoveď + jednoduché vysvetlenie
-  if (m.status === "unanswered") {
-    els.feedback.style.display = "none";
-    els.feedback.innerHTML = "";
-  } else {
-    const correctRaw = (q.choices && typeof q.correct === "number" && q.choices[q.correct]) ? q.choices[q.correct] : "(neznáme)";
-    const userRaw = (typeof m.userChoice === "number" && q.choices && q.choices[m.userChoice]) ? q.choices[m.userChoice] : "(nezodpovedané)";
-    const correctText = stripChoicePrefix(correctRaw);
-    const userText = stripChoicePrefix(userRaw);
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px;
+    }
 
-    const expl = makeExplanation(q.q, correctText);
-    const statusEmoji = m.status === "correct" ? "✅" : "❌";
+    .card {
+      background: #121a33;
+      border: 1px solid #24305c;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+    }
 
-    els.feedback.style.display = "block";
-    els.feedback.innerHTML =
-      `<strong>${statusEmoji} Správna odpoveď: ${escapeHtml(letterForIndex(q.correct) + ") " + correctText)}</strong>
-       <div class="muted">Tvoja odpoveď: ${escapeHtml(letterForIndex(m.userChoice) + ") " + userText)}</div>
-       <div class="explain" style="margin-top:8px;">${escapeHtml("Prečo: " + expl)}</div>`;
-  }
-}
+    h1 {
+      font-size: 20px;
+      margin: 0 0 10px;
+    }
 
+    h2 {
+      font-size: 16px;
+      margin: 16px 0 8px;
+    }
 
-function pick(choiceIndex) {
-  const q = test[idx];
-  const ok = (choiceIndex === q.correct);
-  marks[idx] = { status: ok ? "correct" : "wrong", userChoice: choiceIndex };
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-  // zobraz spätnú väzbu na tej istej otázke (neposúvaj automaticky ďalej)
-  render();
-}
+    button {
+      cursor: pointer;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid #2a3a72;
+      background: #1a2750;
+      color: #e8ecff;
+      text-align: left;
+    }
 
-function finish() {
-  els.quizArea.style.display = "none";
-  els.resultArea.style.display = "block";
+    button:hover {
+      filter: brightness(1.08);
+    }
 
-  const total = test.reduce((s, q) => s + (q.points || 0), 0);
-  const got = test.reduce((s, q, i) => s + (marks[i].status === "correct" ? (q.points || 0) : 0), 0);
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
 
-  const correctN = marks.filter(m => m.status === "correct").length;
-  const wrongN = marks.filter(m => m.status === "wrong").length;
-  const unN = marks.filter(m => m.status === "unanswered").length;
+    .muted {
+      opacity: .75;
+      font-size: 13px;
+    }
 
-  const pct = total ? Math.round((got / total) * 100) : 0;
+    .qmeta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
 
-  els.resultSummary.textContent =
-`Skóre:
+    .pill {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #2a3a72;
+      background: #0c1430;
+      opacity: .95;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      background: #0c1430;
+      border: 1px solid #24305c;
+      padding: 12px;
+      border-radius: 12px;
+      margin: 10px 0;
+    }
+
+    .btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .good {
+      background: #163a2a;
+      border-color: #2f7a57;
+    }
+
+    .bad {
+      background: #3a1d1d;
+      border-color: #8f3b3b;
+    }
+
+    .hr {
+      height: 1px;
+      background: #24305c;
+      margin: 14px 0;
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reviewItem {
+      margin: 14px 0;
+      padding: 12px;
+      border: 1px solid #24305c;
+      border-radius: 12px;
+      background: #0f1730;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #2a3a72;
+      background: #0c1430;
+      margin-right: 6px;
+    }
+
+    .choices {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .choiceBtn {
+      width: 100%;
+    }
+
+    .choiceBtn.correct {
+      border-color: #2f7a57;
+      background: #163a2a;
+    }
+
+    .choiceBtn.wrong {
+      border-color: #8f3b3b;
+      background: #3a1d1d;
+    }
+
+    input[type="number"] {
+      width: 90px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid #2a3a72;
+      background: #0c1430;
+      color: #e8ecff;
+    }
+
+    label.inline {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Náhodný test – Webové technológie (otázky z DOCX)</h1>
+      <div class="row">
+        <button id="startBtn">Spustiť test</button>
+        <button id="restartBtn" disabled>Nový náhodný test</button>
+
+        <label class="inline muted">
+          Počet otázok:
+          <input id="countInput" type="number" min="1" step="1" value="20" />
+        </label>
+
+        <span class="muted" id="bankInfo"></span>
+      </div>
+
+      <div class="hr"></div>
+
+      <div id="quizArea" style="display:none;">
+        <div class="qmeta">
+          <div class="pill" id="qIndex"></div>
+          <div class="pill" id="qPoints"></div>
+          <div class="pill" id="qType"></div>
+        </div>
+
+        <pre id="questionText"></pre>
+
+        <div id="mcqArea">
+          <div class="choices" id="choices"></div>
+          <div class="muted" style="margin-top:8px;">Po kliknutí na odpoveď sa otázka vyhodnotí automaticky.</div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="btns">
+          <button id="prevBtn">← Predošlá</button>
+          <button id="nextBtn">Ďalšia →</button>
+          <button id="finishBtn">Ukončiť test</button>
+        </div>
+        <div class="muted" style="margin-top:10px;" id="progress"></div>
+      </div>
+
+      <div id="resultArea" style="display:none;">
+        <h1>Výsledok</h1>
+        <pre id="resultSummary"></pre>
+
+        <div id="missedBox" style="display:none;">
+          <div class="hr"></div>
+          <h2>Otázky, kde si odpovedal(a) zle</h2>
+          <ul class="list" id="missedList"></ul>
+        </div>
+
+        <div class="hr"></div>
+        <h2>Rekapitulácia (každá otázka + tvoja odpoveď + správna odpoveď)</h2>
+        <div id="reviewList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /** Utility */
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+    function normKey(s) {
+      return String(s).toLowerCase().replace(/\s+/g, " ").trim();
+    }
+    /** Dedupe: ak je otázka duplicitná, vyhrá posledná verzia */
+    function dedupeQuestions(raw) {
+      const map = new Map();
+      for (const item of raw) {
+        if (!item || !item.q) continue;
+        const key = normKey(item.q);
+        map.set(key, item); // last wins
+      }
+      return [...map.values()];
+    }
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    /** ===========================
+     *  BANKA OTÁZOK (z Webové-technologie-150-otázek.docx)
+     *  =========================== */
+    const BANK_RAW = [
+      { "type": "mcq", "points": 1, "q": "Co znamená zkratka MVC v kontextu vývoje webových aplikací?", "choices": ["A) Model-View-Configuration", "B) Model-View-Controller", "C) Module-View-Connection", "D) Main-Variable-Class"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaká je hlavní odpovědnost vrstvy \"Controller\" v architektuře MVC?", "choices": ["A) Definovat strukturu databáze a vztahy mezi tabulkami.", "B) Zobrazovat data uživateli ve formátu HTML.", "C) Přijímat vstupy od uživatele, zpracovávat aplikační logiku a vybírat vhodné View.", "D) Stylovat stránku pomocí CSS šablon."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Která technologie z uvedených je primárně určena pro multiplatformní vývoj (Windows, Linux, Mac)?", "choices": ["A) .NET Framework", "B) .NET Core (resp. .NET 5+)", "C) Windows Forms", "D) WPF"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je hlavním účelem \".NET Standard\"?", "choices": ["A) Vytvořit novou verzi operačního systému Windows.", "B) Nahradit jazyk C# jazykem Java.", "C) Sdílet stejný kód (knihovny) mezi různými platformami .NET.", "D) Zvýšit rychlost internetového připojení aplikace."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Kde se v ASP.NET Core aplikaci (od .NET 6) obvykle konfiguruje Dependency Injection a Middleware?", "choices": ["A) V souboru Index.cshtml", "B) V souboru Program.cs", "C) V souboru Web.config", "D) V souboru Controller.cs"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Lambda výraz\" v jazyce C#?", "choices": ["A) Typ chyby, která nastane při kompilaci.", "B) Forma anonymní metody, která se často používá v LINQ dotazech.", "C) Speciální datový typ pro ukládání velkých čísel.", "D) Název pro metodu, která nemá žádné parametry."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jakou návratovou hodnotu má delegát typu Predicate<T>?", "choices": ["A) void (nic nevrací)", "B) int", "C) bool", "D) Vrací typ T"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Který z následujících delegátů NEMAJÍ návratovou hodnotu (vrací void)?", "choices": ["A) Func<T>", "B) Action<T>", "C) Predicate<T>", "D) Query<T>"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělá LINQ metoda .Where()?", "choices": ["A) Seřadí prvky v kolekci.", "B) Vybere (projikuje) specifické vlastnosti objektů.", "C) Filtruje prvky kolekce na základě zadané podmínky.", "D) Spojí dvě kolekce dohromady."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Atributy v C# (např. [Obsolete]) slouží k:", "choices": ["A) Přidání doplňujících informací (metadat) k elementům kódu (třídy, metody).", "B) Zrychlení běhu cyklů.", "C) Automatickému mazání nepotřebných proměnných.", "D) Vytváření grafického rozhraní."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je to ORM (Object-Relational Mapping)?", "choices": ["A) Jazyk pro psaní stylů webových stránek.", "B) Technika umožňující pracovat s databází pomocí objektů v kódu místo psaní SQL dotazů.", "C) Nástroj pro správu verzí kódu (jako Git).", "D) Protokol pro přenos souborů."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží v Entity Framework Core \"Migrace\" (Migrations)?", "choices": ["A) K přesunu databáze z jednoho serveru na druhý fyzicky.", "B) K synchronizaci schématu databáze se změnami v datovém modelu (třídách) aplikace.", "C) K migraci uživatelů z jedné aplikace do druhé.", "D) K převodu kódu z C# do Java."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký atribut (Data Annotation) použijete, pokud chcete vlastnost označit jako primární klíč?", "choices": ["A) [Required]", "B) [Table]", "C) [Key]", "D) [ForeignKey]"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co znamená pojem \"Eager Loading\" v EF Core?", "choices": ["A) Data se načtou až ve chvíli, kdy k nim v kódu přistoupíme.", "B) Závislá data se načtou z databáze rovnou jako součást hlavního dotazu (např. pomocí .Include()).", "C) Data se načítají po malých částech (stránkování).", "D) Data se nikdy nenačítají z cache."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co se stane při zavolání příkazu ROLLBACK v rámci transakce?", "choices": ["A) Všechny změny provedené v transakci se trvale uloží.", "B) Všechny změny provedené v transakci se vrátí zpět (zruší se).", "C) Databáze se restartuje.", "D) Smaže se celá tabulka."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jakým znakem začíná Razor syntaxe (přechod z HTML do C#) v souborech .cshtml?", "choices": ["A) #", "B) $", "C) %", "D) @"], "correct": 3 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi ViewData a ViewBag?", "choices": ["A) ViewData je dynamický objekt, ViewBag je silně typovaný.", "B) ViewData je Dictionary (klíč-hodnota), ViewBag je dynamická vlastnost (wrapper nad ViewData).", "C) Neexistuje žádný rozdíl, jsou to synonyma.", "D) ViewBag se používá pouze v PHP, ViewData v C#."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží \"Tag Helpers\" v ASP.NET Core (např. asp-controller, asp-action)?", "choices": ["A) K definování CSS stylů přímo v C# kódu.", "B) Pomáhají generovat HTML atributy (např. odkazy) na straně serveru a vypadají jako standardní HTML atributy.", "C) Slouží k psaní Javascriptu v C#.", "D) Nahrazují databázové dotazy."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co reprezentuje soubor _Layout.cshtml?", "choices": ["A) Chybovou stránku aplikace.", "B) Šablonu (layout) obsahující společnou část UI (hlavička, patička), do které se vkládají jednotlivé Views.", "C) Konfigurační soubor pro připojení k databázi.", "D) Skript pro minimalizaci CSS."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělá HTML helper @Html.DisplayFor(model => model.Name)?", "choices": ["A) Zobrazí editační pole (input) pro vlastnost Name.", "B) Vyrenderuje hodnotu vlastnosti Name jako prostý text (nebo dle šablony).", "C) Vymaže vlastnost Name z databáze.", "D) Zobrazí název vlastnosti (\"Name\"), nikoliv její hodnotu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená písmeno \"S\" ve zkratce SOLID?", "choices": ["A) Simple Class Principle", "B) Static Method Principle", "C) Single Responsibility Principle", "D) Source Control Principle"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co říká \"Dependency Inversion Principle\" (DIP)?", "choices": ["A) Třídy by měly záviset na konkrétních implementacích, ne na abstrakcích.", "B) Vysokoúrovňové moduly by neměly záviset na nízkoúrovňových modulech; oba by měly záviset na abstrakcích.", "C) Všechny proměnné musí být deklarovány jako private.", "D) Databáze by měla být závislá na uživatelském rozhraní."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jak se chová služba registrovaná v DI kontejneru jako \"Transient\"?", "choices": ["A) Je vytvořena pouze jednou pro celou dobu běhu aplikace (Singleton).", "B) Je vytvořena jednou pro každý HTTP požadavek (Scoped).", "C) Je vytvořena nová instance pokaždé, když je vyžádána.", "D) Je vytvořena pouze při startu serveru a pak smazána."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jaký je hlavní účel návrhového vzoru \"Repository\"?", "choices": ["A) Abstrakce přístupu k datům, která odděluje doménovou logiku od detailů databázového přístupu.", "B) Vytváření grafického rozhraní pro databázi.", "C) Logování chyb do textového souboru.", "D) Automatické generování hesel uživatelů."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Která vrstva v N-vrstvé architektuře obvykle obsahuje \"Entity\" a \"Doménové služby\"?", "choices": ["A) Presentation Layer", "B) Infrastructure Layer", "C) Domain Layer", "D) Client Application"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Proč je nezbytné provádět validaci dat na straně serveru (Server-Side), i když máme validaci na klientovi?", "choices": ["A) Protože validace na klientovi (JavaScript) se dá snadno obejít nebo vypnout.", "B) Protože server je rychlejší než prohlížeč.", "C) Není to nezbytné, stačí validace na klientovi.", "D) Aby server spotřeboval více energie."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Autentizací a Autorizací?", "choices": ["A) Autentizace ověřuje \"kdo jste\", Autorizace ověřuje \"co smíte dělat\".", "B) Autentizace ověřuje práva, Autorizace ověřuje identitu.", "C) Jsou to synonyma pro stejnou věc.", "D) Autentizace se používá u SQL, Autorizace u NoSQL."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží atribut [Authorize] umístěný nad Controllerem?", "choices": ["A) Povolí přístup pouze anonymním uživatelům.", "B) Omezí přístup k metodám controlleru pouze pro přihlášené uživatele.", "C) Automaticky přihlásí každého návštěvníka jako Admina.", "D) Zablokuje přístup k databázi."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jakou třídu poskytuje ASP.NET Core Identity jako výchozí pro reprezentaci uživatele?", "choices": ["A) AppUser", "B) IdentityUser", "C) SystemUser", "D) WebUser"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"DTO\" (Data Transfer Object)?", "choices": ["A) Objekt sloužící k přenosu dat mezi procesy nebo vrstvami, který neobsahuje business logiku.", "B) Protokol pro přenos souborů v síti.", "C) Typ databáze od firmy Oracle.", "D) Nástroj pro testování výkonu aplikace."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jakou metodu použijete v LINQ dotazu pro \"Eager Loading\" (načtení závislých dat rovnou s hlavní entitou)?", "choices": ["A) .Load()", "B) .Include()", "C) .Join()", "D) .Attach()"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží metoda .AsNoTracking() v Entity Framework Core?", "choices": ["A) Smaže data z databáze bez možnosti obnovy.", "B) Zrychlí dotazy pro čtení tím, že EF nebude sledovat změny v načtených entitách.", "C) Zastaví sledování chyb v aplikaci.", "D) Umožní vkládání dat bez kontroly primárního klíče."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co v kontextu EF Core znamená \"Lazy Loading\"?", "choices": ["A) Data se načítají automaticky až ve chvíli, kdy přistoupíme k navigační vlastnosti (např. product.Orders).", "B) Data se načítají velmi pomalu kvůli chybě v síti.", "C) Data se načtou všechna najednou při startu aplikace.", "D) Je to technika pro odložení startu databázového serveru."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaký je výchozí stav \"Trackování\" (sledování změn) entit v EF Core při běžném dotazu?", "choices": ["A) Vypnuté (NoTracking).", "B) Zapnuté – EF sleduje změny a při SaveChanges() je promítne do DB.", "C) Zapnuté pouze pro operaci DELETE.", "D) EF Core neumí sledovat změny entit."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Která metoda slouží k uložení všech sledovaných změn (INSERT, UPDATE, DELETE) do databáze?", "choices": ["A) context.UpdateDatabase()", "B) context.PushChanges()", "C) context.SaveChanges()", "D) context.Commit()"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jaký je hlavní rozdíl mezi HTML Helpery (např. @Html.TextBoxFor) a Tag Helpery (např. asp-for)?", "choices": ["A) Tag Helpery vypadají jako standardní HTML atributy, zatímco HTML Helpery jsou volání C# metod.", "B) HTML Helpery jsou novější a doporučované, Tag Helpery jsou zastaralé.", "C) Tag Helpery fungují pouze v prohlížeči, HTML Helpery na serveru.", "D) Není mezi nimi žádný rozdíl."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co udělá příkaz @RenderBody() v souboru _Layout.cshtml?", "choices": ["A) Vykreslí hlavičku a patičku stránky.", "B) Na toto místo se vloží obsah konkrétního View (stránky), které používá tento layout.", "C) Vymaže veškerý obsah stránky.", "D) Zobrazí tělo e-mailové zprávy."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jak v Razor View (např. v .cshtml) zapíšete explicitní C# výraz, aby se vyhodnotil a vypsal?", "choices": ["A) $( DateTime.Now )", "B) {{ DateTime.Now }}", "C) @( DateTime.Now )", "D) # DateTime.Now"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Partial View\"?", "choices": ["A) Neúplně načtená stránka kvůli chybě internetu.", "B) Samostatný soubor (View) obsahující část UI, který lze znovupoužít a vložit do jiných Views.", "C) Speciální pohled pouze pro administrátory.", "D) View, které nemá přístup k Modelu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jakým způsobem definujete sekci (např. pro skripty) v Layoutu, kterou pak mohou jednotlivé stránky naplnit?", "choices": ["A) @DefineSection(\"Scripts\")", "B) @RenderSection(\"Scripts\", required: false)", "C) <section name=\"Scripts\" />", "D) @Include(\"Scripts\")"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co říká \"Open/Closed Principle\" (OCP)?", "choices": ["A) Kód by měl být otevřen pro rozšíření, ale uzavřen pro změny (modifikace existujícího kódu).", "B) Databázové spojení má být otevřeno co nejdéle.", "C) Třídy by měly mít pouze veřejné (open) metody, žádné privátní (closed).", "D) Aplikace by měla být open-source."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co porušuje \"Liskov Substitution Principle\" (LSP)?", "choices": ["A) Pokud potomek (zděděná třída) nemůže plně nahradit svého předka bez změny funkčnosti programu (např. Čtverec dědící z Obdélníku, který mění chování rozměrů).", "B) Pokud třída nemá konstruktor.", "C) Pokud metoda vrací void.", "D) Pokud používáme příliš mnoho rozhraní."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co znamená \"Interface Segregation Principle\" (ISP)?", "choices": ["A) Je lepší mít jedno obrovské rozhraní pro celou aplikaci.", "B) Klienti by neměli být nuceni záviset na rozhraních, která nepoužívají (lépe více malých specifických rozhraní než jedno velké).", "C) Rozhraní by měla být vždy privátní.é", "D) Každá třída musí implementovat alespoň 5 rozhraní."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký problém řeší \"Dependency Inversion Principle\" (DIP)?", "choices": ["A) Zabraňuje tomu, aby vysokoúrovňové moduly závisely přímo na nízkoúrovňových modulech (oba mají záviset na abstrakci).", "B) Otáčí pořadí provádění cyklů.", "C) Zajišťuje, že databáze je vytvořena dříve než kód.", "D) Slouží k inverzi barev na webové stránce."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi životním cyklem \"Singleton\" a \"Scoped\" v DI?", "choices": ["A) Singleton se vytváří pro každý požadavek znovu, Scoped je jeden pro celou aplikaci.", "B) Singleton je jedna instance pro celou dobu běhu aplikace, Scoped je jedna instance pro jeden HTTP požadavek.", "C) Scoped se používá jen pro databáze, Singleton pro logování.", "D) Není v nich rozdíl."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená životní cyklus služby \"Transient\"?", "choices": ["A) Služba je vytvořena pouze jednou při startu aplikace.", "B) Služba je vytvořena nově pokaždé, když si ji někdo vyžádá (i v rámci jednoho requestu).", "C) Služba se ukládá na disk.", "D) Služba existuje pouze 5 sekund."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Kde se v ASP.NET Core (tradičně) registrují služby pro Dependency Injection?", "choices": ["A) V metodě ConfigureServices ve třídě Startup (nebo v builder.Services v Program.cs).", "B) V souboru appsettings.json.", "C) V HTML kódu.", "D) V databázi."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Která vrstva v N-vrstvé architektuře (podle DDD) obsahuje Entity a business pravidla?", "choices": ["A) Presentation Layer (Prezentační vrstva)", "B) Infrastructure Layer (Infrastruktura)", "C) Domain Layer (Doménová vrstva)", "D) Distributed Services Layer"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co je typickým úkolem vrstvy \"Infrastructure Layer\"?", "choices": ["A) Vykreslování tlačítek pro uživatele.", "B) Implementace repozitářů, přístup k databázi (EF Core), odesílání emailů.", "C) Definice rozhraní IUser.", "D) Routování URL adres."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží \"Application Layer\"?", "choices": ["A) Obsahuje logiku specifickou pro aplikaci, řídí tok dat mezi UI a doménou, často pracuje s DTO.", "B) Je to místo, kde se instaluje Visual Studio.", "C) Ukládá data fyzicky na pevný disk.", "D) Generuje HTML kód."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Proč používáme vzor \"Repository\"?", "choices": ["A) Abychom mohli psát SQL dotazy přímo v Controlleru.", "B) Pro abstrakci přístupu k datům – odděluje doménovou logiku od konkrétní technologie ukládání dat (např. DB).", "C) Aby aplikace běžela pomaleji.", "D) Je to vzor pro tvorbu uživatelského rozhraní."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je účel vzoru \"Unit of Work\"?", "choices": ["A) Měřit čas práce programátora.", "B) Sdružovat více operací repozitářů do jedné transakce (buď se uloží vše, nebo nic).", "C) Nahradit databázi textovým souborem.", "D) Slouží k testování jednotlivých metod (Unit Testing)."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Kde jsou uloženy výsledky validace modelu v Controlleru?", "choices": ["A) V objektu ViewBag.", "B) V property ModelState.", "C) V souboru cookies.", "D) V databázi."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jak zkontrolujete v Controlleru, zda jsou data odeslaná z formuláře validní?", "choices": ["A) if (Model.IsGood)", "B) if (ModelState.IsValid)", "C) if (CheckData(Model))", "D) if (Valid == true)"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co zajistí validační atribut [Required] nad vlastností modelu?", "choices": ["A) Vlastnost musí být unikátní v databázi.", "B) Vlastnost nesmí být null (je povinná).", "C) Vlastnost musí být číslo.", "D) Vlastnost se automaticky vyplní."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží knihovna \"FluentValidation\"?", "choices": ["A) K plynulému přehrávání videí.", "B) K definici validačních pravidel pomocí Fluent API odděleně od modelu (např. v samostatné třídě).", "C) K validaci CSS stylů.", "D) Je to náhrada za Entity Framework."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Proč nestačí pouze validace na straně klienta (Client-Side)?", "choices": ["A) Protože Javascript může být u klienta vypnutý nebo může útočník validaci obejít a poslat škodlivá data přímo na server.", "B) Protože validace na serveru je hezčí.", "C) Protože klient nemá dostatečný výkon.", "D) Stačí pouze klientská validace, serverová není potřeba."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Která třída v ASP.NET Core Identity slouží primárně k ověřování hesel a přihlašování uživatele?", "choices": ["A) UserManager", "B) SignInManager", "C) RoleManager", "D) AuthManager"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělá atribut [Authorize] umístěný nad akční metodou?", "choices": ["A) Povolí přístup komukoliv (i nepřihlášeným).", "B) Omezí přístup pouze pro autentizované (přihlášené) uživatele.", "C) Zmaže uživatelský účet.", "D) Automaticky uživatele odhlásí."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Autentizací a Autorizací?", "choices": ["A) Autentizace ověřuje identitu (kdo jsem), Autorizace ověřuje oprávnění (co smím dělat).", "B) Autentizace je pro web, Autorizace pro desktop.", "C) Autorizace ověřuje heslo, Autentizace ověřuje roli.", "D) Jsou to synonyma."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je hlavním úkolem Web API v architektuře aplikace?", "choices": ["A) Poskytovat grafické uživatelské rozhraní (GUI) pro koncové uživatele.", "B) Poskytovat služby a data aplikacím (webovým, mobilním, desktopovým) bez grafického rozhraní, obvykle ve formátu JSON.", "C) Generovat HTML stránky pomocí Razor syntaxe.", "D) Spravovat fyzické připojení k databázovému serveru."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Která HTTP metoda se v REST API obvykle používá pro vytvoření nového záznamu?", "choices": ["A) GET", "B) PUT", "C) POST", "D) DELETE"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi metodami PUT a PATCH?", "choices": ["A) PUT aktualizuje celý záznam (všechna data), PATCH aktualizuje jen část záznamu (částečná aktualizace).", "B) PUT je pro čtení, PATCH pro zápis.", "C) PATCH je starší verze PUT a už se nepoužívá.", "D) Není mezi nimi žádný rozdíl."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží atribut [ApiController] umístěný nad třídou Controlleru?", "choices": ["A) Automaticky vygeneruje dokumentaci ve Wordu.", "B) Zjednodušuje vývoj API tím, že aktivuje specifická chování (např. automatické validace modelu, odpovědi 400 Bad Request, bindování z body).", "C) Zakazuje přístup k API z jiných domén.", "D) Mění formát odpovědi z JSON na XML."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená stavový kód HTTP 404?", "choices": ["A) OK (Požadavek byl úspěšně vyřízen).", "B) Unauthorized (Uživatel není přihlášen).", "C) Not Found (Požadovaný zdroj nebyl nalezen).", "D) Internal Server Error (Chyba na serveru)."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co je to Swagger (OpenAPI)?", "choices": ["A) Nástroj pro automatické generování dokumentace a testování Web API.", "B) Nový programovací jazyk od Google.", "C) Databázový systém pro ukládání logů.", "D) Knihovna pro stylování CSS."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaký je hlavní účel použití DTO (Data Transfer Object) ve Web API?", "choices": ["A) Zrychlení připojení k internetu.", "B) Oddělení interního datového modelu (entit) od dat posílaných klientovi (skrytí citlivých dat, zjednodušení struktury).", "C) Náhrada za SQL databázi.", "D) Validace uživatelského hesla."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jakým atributem v metodě Controlleru určíte, že data přicházejí v těle požadavku (body)?", "choices": ["A) [FromUri]", "B) [FromBody]", "C) [FromHeader]", "D) [FromDisk]"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená zkratka AJAX?", "choices": ["A) Asynchronous Java And XHTML", "B) Asynchronous JavaScript And XML", "C) Advanced JSON And XML", "D) Automated Java Application X"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží v JavaScriptu objekt XMLHttpRequest nebo novější fetch?", "choices": ["A) K asynchronnímu zasílání dotazů na server bez nutnosti obnovit celou stránku.", "B) K vykreslování 3D grafiky v prohlížeči.", "C) K ukládání souborů na disk uživatele.", "D) K ukončení prohlížeče."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Proč se ve Web API a controllerech často používají klíčová slova async a await?", "choices": ["A) Aby kód vypadal moderněji.", "B) Aby se uvolnilo vlákno (thread) po dobu čekání na I/O operaci (např. dotaz do databáze), což zvyšuje škálovatelnost serveru.", "C) Protože to vyžaduje prohlížeč Chrome.", "D) Aby se data ukládala do cache."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký návratový typ má obvykle asynchronní akční metoda v Controlleru?", "choices": ["A) void", "B) string", "C) Task<IActionResult> nebo Task<ActionResult<T>>", "D) AsyncResult"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Která úroveň logování (LogLevel) označuje nejvážnější chybu, která může způsobit pád aplikace?", "choices": ["A) Information", "B) Warning", "C) Critical", "D) Debug"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží \"Developer Exception Page\" v ASP.NET Core?", "choices": ["A) K zobrazení reklam vývojářům.", "B) K zobrazení detailních informací o chybě (Stack Trace) během vývoje pro snazší ladění.", "C) K automatické opravě chyb v kódu.", "D) K zobrazení \"Not Found\" stránky pro běžné uživatele."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jak zjistíme v kódu (např. ve Startup.cs nebo Program.cs), zda aplikace běží ve vývojovém prostředí?", "choices": ["A) env.IsDevelopment()", "B) env.IsProduction()", "C) System.IsDebug()", "D) Config.Mode == \"Dev\""], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Proč bychom neměli zobrazovat detailní chybové hlášky (Stack Trace) v produkčním prostředí?", "choices": ["A) Protože to zpomaluje aplikaci.", "B) Z bezpečnostních důvodů – detailní výpis může útočníkovi prozradit citlivé informace o struktuře aplikace.", "C) Protože uživatelé neumí anglicky.", "D) Není důvod, klidně se zobrazovat mohou."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký status kód vrací metoda NotFound() v Controlleru?", "choices": ["A) 200", "B) 301", "C) 404", "D) 500"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co je cílem \"Unit testů\" (Jednotkových testů)?", "choices": ["A) Otestovat celou aplikaci jako celek včetně databáze.", "B) Otestovat nejmenší testovatelnou část kódu (metodu, třídu) izolovaně od ostatních částí.", "C) Otestovat, zda se uživateli líbí grafika.", "D) Změřit rychlost internetového připojení."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží \"Mocking\" (např. knihovna Moq) při testování?", "choices": ["A) K vysmívání se špatnému kódu.", "B) K vytvoření \"falešných\" objektů (závislostí), které simulují chování skutečných objektů, aby bylo možné testovat třídu izolovaně.", "C) K nahrávání obrazovky během testu.", "D) K automatickému psaní kódu za programátora."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co testují \"Integrační testy\"?", "choices": ["A) Pouze pravopisné chyby v dokumentaci.", "B) Spolupráci dvou a více komponentu dohromady (např. Controller + Databáze).", "C) Pouze jednu metodu bez jakýchkoliv závislostí.", "D) Jestli jde zapnout počítač."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená metodika TDD (Test-Driven Development)?", "choices": ["A) Testy se píší až nakonec, když zbude čas.", "B) Vývoj řízený testy – nejdříve se napíše test (který selže), pak se napíše kód pro splnění testu, a nakonec se refaktoruje.", "C) Testování provádí pouze zákazník (Driver).", "D) Testování pomocí jízdy v autě."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená zkratka IaaS v kontextu cloudových služeb?", "choices": ["A) Internet as a Service", "B) Infrastructure as a Service (Infrastruktura jako služba – pronájem virtuálních strojů, sítí).", "C) Information as a Source", "D) Identity as a Security"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená PaaS?", "choices": ["A) Platform as a Service (Platforma jako služba – např. Azure App Service, kde nespravuji OS, ale jen nasazuji aplikaci).", "B) Payment as a Service.", "C) Programming as a Skill.", "D) Public area at School."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaká je hlavní výhoda \"Serverless\" architektury (např. Azure Functions)?", "choices": ["A) Aplikace běží bez jakéhokoliv hardwaru (ve vzduchoprázdnu).", "B) Platíte pouze za skutečný čas/výkon, kdy kód běží (event-driven), a nemusíte spravovat žádné servery.", "C) Serverless znamená, že nepotřebujete internet.", "D) Je to zastaralá technologie."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Docker\" (Kontejnerizace)?", "choices": ["A) Program na úpravu fotek.", "B) Technologie umožňující zabalit aplikaci se všemi jejími závislostmi do kontejneru, který běží stejně na jakémkoliv prostředí.", "C) Cloudová služba od Amazonu pro doručování balíků.", "D) Nový typ databáze."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je \"Minifikace\" (Minification) JavaScriptu nebo CSS?", "choices": ["A) Zvětšení obrázků na stránce.", "B) Proces odstranění zbytečných znaků (mezer, komentářů) a zkrácení názvů proměnných pro zmenšení velikosti souboru a rychlejší načítání.", "C) Přepis kódů do jazyka C++.", "D) Změna barvy písma na černou."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je úkolem \"Load Balanceru\" v cloudu?", "choices": ["A) Vyvažovat (rozdělovat) příchozí síťový provoz mezi více serverů, aby nedošlo k přetížení jednoho z nich.", "B) Měřit váhu serverů.", "C) Zálohovat data na pásky.", "D) Blokovat reklamy."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Který cloudový poskytovatel patří společnosti Microsoft?", "choices": ["A) AWS (Amazon Web Services)", "B) Google Cloud Platform", "C) Azure", "D) IBM Cloud"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co znamená pojem \"Autoscaling\"?", "choices": ["A) Automatická oprava chyb v kódu.", "B) Automatické navýšení nebo snížení počtu běžících instancí (nebo výkonu) podle aktuální zátěže aplikace.", "C) Automatické odesílání e-mailů.", "D) Automatické restartování počítače každou hodinu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Health Check\" endpoint v aplikaci?", "choices": ["A) Stránka s radami pro zdravý životní styl.", "B) Speciální URL adresa, kterou cloudová služba pravidelně volá, aby zjistila, zda aplikace běží a je schopna odpovídat (\"je zdravá\").", "C) Antivirová kontrola souborů.", "D) Kontrola pravopisu v textech."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Middleware\" v ASP.NET Core?", "choices": ["A) Software pro grafický návrh webu.", "B) Komponenta (kus kódu), která je součástí pipeline (potrubí) zpracování HTTP požadavku a odpovědi.", "C) Hardware, který propojuje server a klienta.", "D) Antivirový program běžící na pozadí."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Záleží na pořadí, v jakém jsou Middleware komponenty registrovány v Program.cs?", "choices": ["A) Ne, na pořadí nezáleží, spouštějí se paralelně.", "B) Ano, pořadí je kritické – komponenty se vykonávají v tom pořadí, v jakém jsou přidány (request), a v opačném pořadí při návratu (response).", "C) Záleží na pořadí pouze u Windows Serveru.", "D) Pořadí určuje náhoda."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi app.Use(...) a app.Run(...)?", "choices": ["A) app.Run přidá middleware na konec pipeline a ukončí ji (nepředá řízení dál), app.Use může předat řízení dalšímu middleware.", "B) app.Use se používá pro databáze, app.Run pro grafiku.", "C) app.Run je zastaralé a nepoužívá se.", "D) Není mezi nimi žádný rozdíl."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co dělá middleware app.UseStaticFiles()?", "choices": ["A) Umožňuje aplikaci servírovat statické soubory (obrázky, CSS, JS) ze složky wwwroot.", "B) Zakazuje stahování souborů.", "C) Komprimuje statické soubory do ZIP archivu.", "D) Převede všechny soubory na PDF."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co se stane, pokud v pipeline nastane výjimka a není zaregistrován middleware UseExceptionHandler nebo UseDeveloperExceptionPage?", "choices": ["A) Aplikace spadne a klientovi se vrátí prázdná odpověď nebo obecná chyba 500 bez detailů.", "B) Server automaticky restartuje aplikaci a chybu opraví.", "C) Klientovi se zobrazí modrá obrazovka smrti.", "D) Výjimka se ignoruje a program běží dál."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jak vypadá výchozí (konvenční) šablona routy v ASP.NET Core MVC?", "choices": ["A) {controller=Home}/{action=Index}/{id?}", "B) {action}/{controller}/{id}", "C) {table}/{row}/{column}", "D) {api}/{key}/{value}"], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co znamená otazník v parametru routy {id?}?", "choices": ["A) Že parametr je povinný a musí být číslo.", "B) Že parametr je volitelný (nemusí být v URL uveden).", "C) Že parametr obsahuje tajnou informaci.", "D) Že se jedná o dotaz do databáze."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Atributové routování\" (Attribute Routing)?", "choices": ["A) Definování rout pomocí atributů [Route(\"...\")] nebo [HttpGet(\"...\")] přímo nad metodami a controllery.", "B) Routování podle barvy atributů v HTML.", "C) Zastaralý způsob routování z roku 1990.", "D) Náhodné generování URL adres."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jak zajistíte, aby parametr v URL byl chápán pouze jako celé číslo (např. /Product/Detail/5)?", "choices": ["A) Použitím constraintu (omezení): {id:int}.", "B) Napsáním komentáře do kódu.", "C) Nelze to zajistit, URL je vždy text.", "D) Použitím regulárního výrazu v HTML."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Protokol HTTP je \"stateless\" (bezstavový). Co to znamená?", "choices": ["A) Server si nepamatuje žádné informace o předchozích požadavcích klienta; každý požadavek je zpracován izolovaně.", "B) Server neustále sleduje polohu uživatele.", "C) Server funguje bez operačního systému.", "D) Aplikace nemá žádnou domovskou stránku."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Kde jsou uložena data v Session (Server-side session)?", "choices": ["A) V prohlížeči uživatele v textovém souboru.", "B) V URL adrese.", "C) Na straně serveru (v paměti nebo v distribuované cache), identifikovaná pomocí ID v cookie.", "D) Na grafické kartě serveru."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Session a Cookie?", "choices": ["A) Cookie se ukládá u klienta (prohlížeč), Session data jsou na serveru.", "B) Cookie je pro text, Session pro obrázky.", "C) Session je trvalá, Cookie se po zavření prohlížeče vždy smaže.", "D) Není rozdíl, jsou to synonyma."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží TempData v MVC Controlleru?", "choices": ["A) K trvalému uložení dat do databáze.", "B) K přenosu dat mezi dvěma po sobě jdoucími požadavky (např. při přesměrování/Redirect), poté data zmizí.", "C) K uložení teploty procesoru.", "D) K logování chyb."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělají \"Action Filters\" (Filtry akcí)?", "choices": ["A) Umožňují spustit kód před a po vykonání akční metody (např. pro logování nebo úpravu dat).", "B) Filtrují prach v serverovně.", "C) Mění barvu tlačítek na stránce.", "D) Mažou nevhodná slova z databáze."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Který filtr se používá k ošetření neočekávaných chyb v celé aplikaci nebo controlleru?", "choices": ["A) ActionFilter", "B) ResourceFilter", "C) ExceptionFilter", "D) ResultFilter"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Extension Method\" (Rozšiřující metoda)?", "choices": ["A) Metoda, která prodlužuje běh programu.", "B) Statická metoda ve statické třídě, která používá klíčové slovo this u prvního parametru, čímž \"přidává\" metodu k existujícímu typu.", "C) Metoda pro zvětšení písma.", "D) Externí plugin do Visual Studia."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená operátor ?? (Null-coalescing operator) v C#?", "choices": ["A) Vrací levou stranu, pokud není null; jinak vrací pravou stranu (např. A ?? B).", "B) Porovnává dvě hodnoty.", "C) Znamená \"přibližně rovno\".", "D) Označuje komentář."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží klíčové slovo using (např. using (var x = new ...)) před zavedením using declaration?", "choices": ["A) K importu jmenných prostorů (namespaces).", "B) K zajištění, že objekt implementující IDisposable bude na konci bloku správně uvolněn (zavolána metoda Dispose).", "C) K použití cizího kódu bez licence.", "D) K definování uživatelského jména."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Nullable Reference Type\" (např. string?) zavedený v novějších verzích C#?", "choices": ["A) Typ, který nemůže nikdy obsahovat hodnotu.", "B) Explicitní vyjádření, že proměnná může nabývat hodnoty null (kompilátor pak hlídá možný NullReferenceException).", "C) Chyba v kompilátoru.", "D) Typ pro ukládání pouze otazníků."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to útok XSS (Cross-Site Scripting)?", "choices": ["A) Útočník vloží do stránky škodlivý JavaScript, který se spustí v prohlížeči oběti (např. ukradne cookies).", "B) Útočník se nabourá do serverovny fyzicky.", "C) Útočník smaže CSS styly stránky.", "D) Útočník přetíží server velkým množstvím dotazů."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jak Razor (View Engine) brání proti XSS útokům při výpisu @Model.Text?", "choices": ["A) Nebrání nijak.", "B) Automaticky HTML-enkóduje vypisovaný text (převede znaky jako < na <), takže se nespustí jako skript.", "C) Zablokuje uživatele.", "D) Převede text na obrázek."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to útok CSRF/XSRF (Cross-Site Request Forgery)?", "choices": ["A) Falšování identity serveru.", "B) Útok, kdy útočník donutí prohlížeč přihlášeného uživatele odeslat nechtěný požadavek (např. převod peněz) na zranitelný web.", "C) Krádež hesla pomocí kamery.", "D) Útok na Wi-Fi síť."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jak se v ASP.NET Core MVC bráníme proti CSRF?", "choices": ["A) Pomocí \"y Tokenu\" (skrytého pole ve formuláři a cookie), který server ověřuje.", "B) Vypnutím JavaScriptu.", "C) Používáním pouze metody GET.", "D) Nepoužíváním formulářů."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Která knihovna v ASP.NET Core slouží pro komunikaci v reálném čase (Real-time web)?", "choices": ["A) SignalR", "B) React", "C) Angular", "D) RealTimeSharp"], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Hub\" v kontextu SignalR?", "choices": ["A) Síťový rozbočovač (hardware).", "B) Třída na serveru, která spravuje připojení klientů a umožňuje volání metod na klientech (RPC).", "C) Databázová tabulka.", "D) Název pro USB port."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělá [BindProperty] v Razor Pages?", "choices": ["A) Svazuje hodnotu z HTTP požadavku (např. formuláře) s vlastností ve třídě PageModel.", "B) Lepí stránky k sobě.", "C) Zvyšuje bezpečnost hesla.", "D) Formátuje datum a čas."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi SQL a NoSQL databází?", "choices": ["A) SQL je relační (tabulky, pevné schéma), NoSQL je nerelační (dokumenty, flexibilní schéma).", "B) SQL je zdarma, NoSQL je placené.", "C) SQL nepodporuje transakce, NoSQL ano.", "D) NoSQL se používá pouze offline."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Cache\" (Mezipaměť)?", "choices": ["A) Místo pro ukládání dočasných dat pro rychlejší přístup při opakovaném použití.", "B) Peníze v hotovosti.", "C) Typ procesoru.", "D) Program na mazání virů."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží formát JSON?", "choices": ["A) K formátování textu ve Wordu.", "B) K výměně dat mezi serverem a klientem (textový formát založený na syntaxi objektů JavaScriptu).", "C) K přehrávání videa.", "D) K definici barev na webu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená stavový kód HTTP 500?", "choices": ["A) Not Found.", "B) Forbidden.", "C) Internal Server Error (Chyba na straně serveru).", "D) OK."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Který soubor slouží jako hlavní místo pro aplikační konfiguraci (např. Connection String) v ASP.NET Core?", "choices": ["A) web.config", "B) global.asax", "C) appsettings.json", "D) config.xml"], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jak v kódu (např. v Controlleru) získáte hodnotu z konfiguračního souboru?", "choices": ["A) Pomocí System.Configuration.Manager.", "B) Injektováním rozhraní IConfiguration a zavoláním _config[\"Klic\"].", "C) Přečtením souboru pomocí File.ReadAllText.", "D) Hodnoty se načítají samy do proměnných."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je účel vzoru IOptions<T>?", "choices": ["A) Umožňuje mapovat sekce z appsettings.json do silně typovaných C# tříd (POCO) a ty pak injektovat pomocí DI.", "B) Slouží k výběru možností v HTML select boxu.", "C) Je to náhrada za databázi.", "D) Slouží k nastavení barvy pozadí aplikace."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Kestrel\"?", "choices": ["A) Webový prohlížeč.", "B) Lehký, open-source, multiplatformní webový server, který je výchozím serverem pro ASP.NET Core.", "C) Název databázového enginu.", "D) Grafický editor pro Visual Studio."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Proč se v produkci často používá Kestrel za \"Reverse Proxy\" serverem (jako je IIS, Nginx nebo Apache)?", "choices": ["A) Kestrel neumí běžet sám.", "B) Reverse Proxy poskytuje lepší zabezpečení, správu SSL certifikátů, kompresi a omezování požadavků, což Kestrel v základu neřeší tak robustně.", "C) Aby byla aplikace pomalejší.", "D) Není to pravda, Kestrel se vždy používá napřímo vystavený do internetu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je zásadní rozdíl mezi IEnumerable<T> a IQueryable<T> při práci s databází (EF Core)?", "choices": ["A) IEnumerable provádí filtraci až v paměti aplikace (načte všechna data z DB), IQueryable sestavuje SQL dotaz a filtraci provádí na databázovém serveru.", "B) IQueryable je starší a pomalejší.", "C) IEnumerable neumí pracovat s čísly.", "D) Není mezi nimi rozdíl."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co se stane, když v LINQ dotazu zapomenete zavolat metodu jako .ToList(), .Count() nebo .First()?", "choices": ["A) Dotaz se okamžitě provede.", "B) Dotaz se neprovede (Deferred Execution) – definice dotazu se pouze uloží do proměnné, ale data se z databáze nenačtou.", "C) Vyhodí se výjimka.", "D) Smažou se data v tabulce."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"SQL Injection\"?", "choices": ["A) Způsob optimalizace SQL dotazů.", "B) Bezpečnostní chyba, kdy útočník vloží škodlivý SQL kód do vstupního pole formuláře, který se pak spustí na databázi.", "C) Instalace SQL serveru.", "D) Vkládání dat do tabulky pomocí Excelu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jak se v EF Core nejlépe bránit proti SQL Injection?", "choices": ["A) Používáním string.Format pro skládání dotazů.", "B) Používáním LINQ metod nebo parametrizovaných dotazů (EF Core toto dělá automaticky).", "C) Vypnutím firewallu.", "D) Psaním dotazů pouze velkými písmeny."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Kdy by měl server vrátit status kód 201 Created?", "choices": ["A) Vždy, když server běží.", "B) Po úspěšném dokončení metody POST, která vytvořila nový zdroj (záznam).", "C) Když dojde k chybě serveru.", "D) Při smazání záznamu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"CORS\" (Cross-Origin Resource Sharing)?", "choices": ["A) Mechanismus prohlížeče, který blokuje nebo povoluje požadavky na zdroje z jiné domény, než ze které aplikace běží.", "B) Sdílení procesorového času mezi jádry.", "C) Typ písma na webu.", "D) Knihovna pro animace."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"JWT\" (JSON Web Token)?", "choices": ["A) Formát pro ukládání obrázků.", "B) Kompaktní a bezpečný způsob přenosu informací mezi stranami jako JSON objekt, často používaný pro bezstavovou autentizaci v Single Page Aplikacích (SPA) a Web API.", "C) Programovací jazyk Java Web Tools.", "D) Nástroj pro kompresi souborů."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi parametry [FromQuery] a [FromRoute] v Controlleru?", "choices": ["A) [FromRoute] bere data z části URL cesty (např. /api/users/5), [FromQuery] bere data z parametrů za otazníkem (např. ?id=5).", "B) [FromQuery] je pro čísla, [FromRoute] pro text.", "C) Není rozdíl, fungují stejně.", "D) [FromRoute] se používá pouze pro obrázky."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "K čemu slouží datový typ record zavedený v C# 9?", "choices": ["A) K nahrávání zvuku.", "B) Pro definici referenčních typů, které jsou primárně určené k ukládání dat a poskytují immutabilitu (neměnnost) a porovnávání hodnot (value equality) automaticky.", "C) Je to starý typ pro databáze.", "D) Slouží k mazání souborů."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělá \"Garbage Collector\" (GC) v .NET?", "choices": ["A) Vybírá poplatky za software.", "B) Automaticky spravuje paměť – uvolňuje objekty, které již aplikace nepoužívá, aby nedošlo k vyčerpání paměti (Memory Leak).", "C) Sbírá logy chyb a posílá je Microsoftu.", "D) Organizuje soubory na disku."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi String a StringBuilder?", "choices": ["A) String je neměnný (immutable) – každá úprava vytvoří novou instanci. StringBuilder je měnný (mutable) a efektivnější pro časté spojování textu v cyklech.", "B) String je rychlejší ve všech případech.", "C) StringBuilder se používá pro čísla.", "D) String neexistuje v C#, používá se jen Text."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co znamená klíčové slovo var v C#?", "choices": ["A) Že proměnná nemá žádný typ (je dynamická).", "B) Že typ proměnné je statický, ale odvodí ho kompilátor automaticky podle přiřazené hodnoty (Implicit typing).", "C) Je to chyba syntaxe.", "D) Znamená \"Variable Access Rights\"."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"NuGet\"?", "choices": ["A) Čokoládová tyčinka pro programátory.", "B) Správce balíčků pro .NET, který umožňuje snadno stahovat a instalovat knihovny třetích stran do projektu.", "C) Nový operační systém.", "D) Název pro kompilátor C#."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená pojem \"Scaffolding\" ve Visual Studiu?", "choices": ["A) Stavba lešení kolem počítače.", "B) Automatické generování kódu (např. Controllerů a Views) na základě modelu a kontextu databáze.", "C) Formátování kódu do barev.", "D) Mazání projektu."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je úkolem souboru Program.cs v moderních .NET aplikacích (od verze 6)?", "choices": ["A) Obsahuje pouze komentáře.", "B) Je to vstupní bod aplikace, kde se vytváří WebApplicationBuilder, registrují služby (DI) a konfiguruje Middleware pipeline.", "C) Slouží k definici HTML stylů.", "D) Ukládá hesla uživatelů."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Blazor\"?", "choices": ["A) Framework pro tvorbu interaktivního webového UI pomocí C# místo JavaScriptu (běží na serveru nebo ve WebAssembly).", "B) Laserová tiskárna.", "C) Antivirový program.", "D) Nástroj na úpravu videa."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Proč je důležité používat verzovací systém (např. Git)?", "choices": ["A) Abychom mohli sledovat historii změn, spolupracovat v týmu a vrátit se k funkční verzi v případě chyby.", "B) Abychom zaplnili disk.", "C) Není to důležité, stačí zálohovat zkopírováním složky.", "D) Abychom měli hezčí ikonky souborů."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co znamená v C# klíčové slovo static u třídy?", "choices": ["A) Třída se nemůže pohybovat po obrazovce.", "B) Třídu nelze instanciovat (nevytváří se objekty new Trida()) a obsahuje pouze statické členy.", "C) Třída je smazána po vypnutí počítače.", "D) Třída je neviditelná."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Deadlock\" (Uváznutí)?", "choices": ["A) Situace, kdy dvě a více vláken čekají navzájem na uvolnění prostředků, které drží to druhé, a aplikace tak \"zamrzne\".", "B) Zámek na dveřích serverovny.", "C) Konec životnosti aplikace.", "D) Typ písma."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi Debug a Release konfigurací sestavení (Build)?", "choices": ["A) Debug obsahuje ladicí informace a není optimalizován (pro vývoj), Release je plně optimalizován pro výkon (pro produkci).", "B) Debug je pro zákazníka, Release pro vývojáře.", "C) Release obsahuje viry.", "D) Není rozdíl."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je to \"Response Caching\"?", "choices": ["A) Ukládání vygenerované odpovědi (např. HTML stránky) do paměti, aby se při dalším stejném požadavku nemusela generovat znovu.", "B) Odpovídání na e-maily.", "C) Ukládání hesel.", "D) Zpomalení odezvy serveru."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co znamená zkratka API?", "choices": ["A) Application Programming Interface", "B) Advanced Program Internet", "C) All People Interface", "D) Apple Phone Iphone"], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Jaká metoda v DbContext se používá pro přímé spuštění surového SQL dotazu (např. pro složitý report)?", "choices": ["A) context.Database.ExecuteSqlRaw() nebo FromSqlRaw()", "B) context.Run()", "C) context.DoMagic()", "D) Nelze spustit SQL, musíme použít jen C#."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co je hlavním cílem \"Clean Architecture\" (Čisté architektury)?", "choices": ["A) Aby kód neobsahoval sprostá slova.", "B) Rozdělení aplikace do kruhových vrstev, kde vnitřní vrstvy (doména) nezávisí na vnějších (UI, DB), což zvyšuje testovatelnost a udržovatelnost.", "C) Používání pouze bílého pozadí v editoru.", "D) Aby aplikace neměla žádné soubory."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Kdo je \"Garantem\" předmětu zmíněným v úvodní prezentaci (z PDF)?", "choices": ["A) Bill Gates", "B) doc. Ing. Petr Šilhavý, Ph.D.", "C) FunTom of the Blue Screen", "D) Elon Musk"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Máte metodu async void DoSomething(). Co se stane, pokud v ní dojde k neošetřené výjimce?", "choices": ["A) Výjimka je zachycena v TaskScheduler.UnobservedTaskException.", "B) Výjimka „probublá“ nahoru a lze ji zachytit v bloku try-catch, který metodu zavolal.", "C) Výjimka shodí celý proces (aplikaci), protože async void nevrací Task, do kterého by se výjimka uložila, a nelze ji zvenčí odchytit.", "D) Nestane se nic, výjimka je tiše ignorována."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jaký je výsledek porovnání object.ReferenceEquals(str1, str2), pokud string str1 = \"test\" a string str2 = \"test\" (literály jsou definovány v kódu)?", "choices": ["A) False, protože každý string je nový objekt na haldě.", "B) True, díky mechanismu „String Interning“, který pro stejné literály používá stejnou paměťovou referenci.", "C) False, stringy jsou hodnotové typy.", "D) Chyba kompilace."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Kdy se zavolá statický konstruktor třídy (static MyClass())?", "choices": ["A) Při startu aplikace (v Main).", "B) Přesně v okamžiku, kdy Garbage Collector uvolňuje první instanci.", "C) Automaticky před vytvořením první instance této třídy nebo před prvním přístupem k jakémukoliv statickému členu.", "D) Musí se zavolat manuálně."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Co se stane, když v bloku try-catch-finally zavoláte v části try příkaz return?", "choices": ["A) Metoda okamžitě skončí a blok finally se nevykoná.", "B) Blok finally se vykoná ještě předtím, než metoda skutečně vrátí hodnotu a ukončí se.", "C) Kompilátor zahlásí chybu (nedosažitelný kód).", "D) Návratová hodnota bude null."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi const a readonly u pole ve třídě?", "choices": ["A) const je vyhodnoceno při kompilaci, readonly při běhu (v konstruktoru).", "B) Není rozdíl.", "C) readonly lze měnit kdykoliv, const jen jednou.", "D) const pole nelze použít pro referenční typy (kromě null/string), takže pole musí být readonly."], "correct": 0 },
+      { "type": "mcq", "points": 1, "q": "Co se stane (v defaultním nastavení .NET Core v Developmentu), pokud do služby registrované jako Singleton injektujete službu registrovanou jako Scoped?", "choices": ["A) Nic zvláštního, bude to fungovat.", "B) Nastane „Captive Dependency“ a aplikace vyhodí výjimku při startu/prvním volání (Scope validation error).", "C) Scoped služba se automaticky povýší na Singleton.", "D) Singleton služba se poníží na Scoped."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Pokud zaregistrujete tutéž službu (rozhraní) do DI kontejneru třikrát za sebou a poté si vyžádáte v konstruktoru IEnumerable<IService>, co dostanete?", "choices": ["A) Chybu (Ambiguous Registration).", "B) Pouze poslední zaregistrovanou instanci.", "C) Všechny tři instance.", "D) Pouze první zaregistrovanou instanci."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Pokud si ale vyžádáte pouze jednu instanci IService (ne kolekci), kterou dostanete?", "choices": ["A) První zaregistrovanou.", "B) Poslední zaregistrovanou.", "C) Náhodnou.", "D) Vyhodí výjimku."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "V Program.cs máte pořadí: 1. app.UseAuthorization(), 2. app.UseAuthentication(). Co se stane?", "choices": ["A) Vše funguje normálně.", "B) Autorizace selže (nebo pustí každého), protože v době jejího běhu ještě nebyla identita uživatele ověřena.", "C) Middleware se automaticky seřadí správně sám.", "D) Aplikace nepůjde zkompilovat."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Máte middleware, který volá await _next(context) a POTÉ se snaží zapsat do Response. Co se stane, pokud už další middleware začal posílat data klientovi?", "choices": ["A) Hlavička se normálně přidá.", "B) Vyhodí se výjimka InvalidOperationException (Headers are read-only, response has already started).", "C) Hlavička se pošle v příštím requestu.", "D) Server spadne."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co se stane, pokud v Controlleru vyhodíte výjimku, ale nemáte zaregistrovaný žádný Exception Handler middleware?", "choices": ["A) Framework chybu spolkne a vrátí 200 OK.", "B) Prohlížeč zobrazí standardní chybovou stránku IIS/Kestrelu nebo prázdnou 500 (bez detailů).", "C) Server se restartuje.", "D) Zavolá se metoda OnError v Controlleru."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Použijete metodu dbSet.Find(id). Jak se liší od .FirstOrDefault(x => x.Id == id)?", "choices": ["A) Find je jen starší název pro FirstOrDefault.", "B) Find nejprve hledá entitu v lokální paměti (Change Trackeru). Pokud ji najde, neposílá dotaz do databáze.", "C) Find umí hledat jen podle stringů.", "D) FirstOrDefault je rychlejší, protože používá indexy."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Máte načtenou entitu s .AsNoTracking(). Poté změníte její vlastnost a zavoláte SaveChanges(). Co se stane?", "choices": ["A) Změna se uloží do DB.", "B) Nestane se nic (změna se neuloží), protože EF Core entitu nesleduje.", "C) Vyhodí se výjimka.", "D) Uloží se nový řádek (duplikát)."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co provede následující LINQ příkaz?", "choices": ["A) Efektivně vyfiltruje uživatele v databázi.", "B) Načte všechny uživatele se jménem „Admin“ do paměti a teprve tam filtruje podle věku.", "C) První ToList() se ignoruje.", "D) Nefunguje, nelze volat ToList() dvakrát."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co znamená „N+1 problém“ při načítání dat?", "choices": ["A) Chyba v cyklu, který běží N+1 krát.", "B) Načtení N entit jedním dotazem a poté N dalších dotazů při přístupu k navigační vlastnosti.", "C) Verze EF Core N+1.", "D) Problém s primárním klíčem."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl v chování IQueryable při použití IEnumerable proměnné?", "choices": ["A) Žádný.", "B) Filtrace se provede až v paměti (client-side), do DB se pošle SELECT *.", "C) Kód spadne.", "D) EF Core nepodporuje IEnumerable."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Dvě různé akce mají [Route(\"api/items\")]. Co se stane při GET /api/items?", "choices": ["A) Zavolá se první nalezená.", "B) Zavolá se poslední nalezená.", "C) Vyhodí se AmbiguousMatchException.", "D) ASP.NET Core náhodně vybere jednu."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Jaký je rozdíl mezi [FromBody] string a prostým string parametrem v POST metodě?", "choices": ["A) Žádný.", "B) Prostý string se hledá v Query/Route, [FromBody] čte celé tělo requestu.", "C) [FromBody] je povinné vždy.", "D) Prostý string nefunguje."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Je metoda HTTP POST idempotentní?", "choices": ["A) Ano.", "B) Ne.", "C) Ano, pokud vrací JSON.", "D) Záleží na prohlížeči."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co se stane, když v Razor View zavoláte @MyAsyncMethod() místo @await MyAsyncMethod()?", "choices": ["A) Vypíše se výsledek.", "B) Metoda se provede synchronně.", "C) Vypíše se objekt Task do HTML.", "D) Chyba kompilace."], "correct": 2 },
+      { "type": "mcq", "points": 1, "q": "Třída implementuje IDisposable. Znamená to, že ji GC neumí uklidit?", "choices": ["A) Ano.", "B) Ne. GC ji uklidí, Dispose slouží k deterministickému uvolnění zdrojů.", "C) IDisposable nemá s GC nic společného.", "D) GC ji ignoruje."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co je to „Boxing“?", "choices": ["A) Docker kontejner.", "B) Převod Value Type na reference type s alokací na haldě.", "C) Komprese.", "D) HTML prvek."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Jaký je defaultní návratový Status Code metody Controlleru, která vrací void?", "choices": ["A) 200 OK", "B) 204 No Content", "C) 404 Not Found", "D) 201 Created"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Může mít struct bezparametrický konstruktor (před C# 10)?", "choices": ["A) Ano.", "B) Ne.", "C) Ano, ale privátní.", "D) Nemá konstruktory."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co vrátí Math.Round(2.5) v C#?", "choices": ["A) 3", "B) 2", "C) 2.5", "D) 0"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Který filtr v ASP.NET Core MVC pipeline se spustí jako první?", "choices": ["A) Action Filter", "B) Authorization Filter", "C) Resource Filter", "D) Exception Filter"], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co se stane, když v catch bloku použijete throw ex; místo throw;?", "choices": ["A) Nic.", "B) Ztratí se původní Stack Trace.", "C) Aplikace se ukončí.", "D) Je to rychlejší."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Je List<T> thread-safe?", "choices": ["A) Ano.", "B) Ne.", "C) Ano, pokud je T int.", "D) Ano, pokud použijeme lock jen při čtení."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Co dělá yield return?", "choices": ["A) Vrátí kolekci.", "B) Vrací prvky postupně (lazy evaluation).", "C) Zastaví program.", "D) Vrátí výnos."], "correct": 1 },
+      { "type": "mcq", "points": 1, "q": "Může být statická třída generická?", "choices": ["A) Ne.", "B) Ano.", "C) Pouze pokud dědí z object.", "D) Ano, ale nesmí mít statické metody."], "correct": 1 }
+    ];
+
+    /** výsledná banka (bez duplicít) */
+    const BANK = dedupeQuestions(BANK_RAW);
+
+    const els = {
+      startBtn: document.getElementById("startBtn"),
+      restartBtn: document.getElementById("restartBtn"),
+      countInput: document.getElementById("countInput"),
+      bankInfo: document.getElementById("bankInfo"),
+
+      quizArea: document.getElementById("quizArea"),
+      resultArea: document.getElementById("resultArea"),
+
+      qIndex: document.getElementById("qIndex"),
+      qPoints: document.getElementById("qPoints"),
+      qType: document.getElementById("qType"),
+      questionText: document.getElementById("questionText"),
+
+      choices: document.getElementById("choices"),
+
+      prevBtn: document.getElementById("prevBtn"),
+      nextBtn: document.getElementById("nextBtn"),
+      finishBtn: document.getElementById("finishBtn"),
+      progress: document.getElementById("progress"),
+
+      resultSummary: document.getElementById("resultSummary"),
+      missedBox: document.getElementById("missedBox"),
+      missedList: document.getElementById("missedList"),
+      reviewList: document.getElementById("reviewList"),
+    };
+
+    els.bankInfo.textContent = `Banka: ${BANK.length} otázok (výber náhodne).`;
+
+    let test = [];
+    let idx = 0;
+    // marks: { status: "correct"|"wrong"|"unanswered", userChoice?: number }
+    let marks = [];
+
+    function clampInt(v, min, max) {
+      const n = Math.floor(Number(v));
+      if (!Number.isFinite(n)) return min;
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function startTest() {
+      const wanted = clampInt(els.countInput.value, 1, BANK.length);
+      els.countInput.value = String(wanted);
+
+      const pool = shuffle([...BANK]);
+      test = pool.slice(0, wanted);
+
+      idx = 0;
+      marks = test.map(() => ({ status: "unanswered" }));
+
+      els.resultArea.style.display = "none";
+      els.quizArea.style.display = "block";
+      els.restartBtn.disabled = false;
+
+      render();
+    }
+
+    function render() {
+      const q = test[idx];
+
+      els.qIndex.textContent = `Otázka ${idx + 1} / ${test.length}`;
+      els.qPoints.textContent = `Body: ${q.points ?? 1}`;
+      els.qType.textContent = "Výber z možností (A–D)";
+      els.questionText.textContent = q.q;
+
+      els.prevBtn.disabled = idx === 0;
+      els.nextBtn.disabled = idx === test.length - 1;
+
+      const answeredCount = marks.filter(m => m.status !== "unanswered").length;
+      els.progress.textContent = `Zodpovedané: ${answeredCount}/${test.length}`;
+
+      // render choices
+      els.choices.innerHTML = "";
+      const m = marks[idx];
+      (q.choices || []).forEach((ch, i) => {
+        const btn = document.createElement("button");
+        btn.className = "choiceBtn";
+        btn.type = "button";
+        btn.innerHTML = escapeHtml(ch);
+
+        // show marking if already answered
+        if (m.status !== "unanswered") {
+          if (i === q.correct) btn.classList.add("correct");
+          if (typeof m.userChoice === "number" && i === m.userChoice && i !== q.correct) btn.classList.add("wrong");
+          btn.disabled = true;
+        }
+
+        btn.addEventListener("click", () => pick(i));
+        els.choices.appendChild(btn);
+      });
+    }
+
+    function pick(choiceIndex) {
+      const q = test[idx];
+      const ok = (choiceIndex === q.correct);
+      marks[idx] = { status: ok ? "correct" : "wrong", userChoice: choiceIndex };
+
+      // auto-advance
+      if (idx < test.length - 1) {
+        idx++;
+        render();
+      } else {
+        finish();
+      }
+    }
+
+    function finish() {
+      els.quizArea.style.display = "none";
+      els.resultArea.style.display = "block";
+
+      const total = test.reduce((s, q) => s + (q.points || 0), 0);
+      const got = test.reduce((s, q, i) => s + (marks[i].status === "correct" ? (q.points || 0) : 0), 0);
+
+      const correctN = marks.filter(m => m.status === "correct").length;
+      const wrongN = marks.filter(m => m.status === "wrong").length;
+      const unN = marks.filter(m => m.status === "unanswered").length;
+
+      const pct = total ? Math.round((got / total) * 100) : 0;
+
+      els.resultSummary.textContent =
+        `Skóre:
 - Body: ${got} / ${total} (${pct} %)
 - Správne: ${correctN}
 - Zle: ${wrongN}
 - Nezodpovedané: ${unN}`;
 
-  // missed list
-  const missed = test
-    .map((q, i) => ({ q, i }))
-    .filter(x => marks[x.i].status === "wrong");
+      // missed list
+      const missed = test
+        .map((q, i) => ({ q, i }))
+        .filter(x => marks[x.i].status === "wrong");
 
-  if (missed.length) {
-    els.missedBox.style.display = "block";
-    els.missedList.innerHTML = "";
-    missed.forEach(({
-      q, i
-    }) => {
-      const li = document.createElement("li");
-      const user = marks[i].userChoice;
-      const userText = (typeof user === "number" && q.choices && q.choices[user]) ? q.choices[user] : "(nezodpovedané)";
-      const correctText = (q.choices && q.choices[q.correct]) ? q.choices[q.correct] : "(neznáme)";
-      const expl = makeExplanation(q.q, stripChoicePrefix(correctText));
-      li.innerHTML = `<strong>(${
-        q.points || 0
-      }b) ${escapeHtml(q.q)}</strong>
-<pre>Tvoja odpoveď: ${escapeHtml(userText)}\nSprávna odpoveď: ${escapeHtml(correctText)}\nPrečo: ${escapeHtml(expl)}</pre>`;
-      els.missedList.appendChild(li);
-    });
-  } else {
-    els.missedBox.style.display = "none";
-  }
+      if (missed.length) {
+        els.missedBox.style.display = "block";
+        els.missedList.innerHTML = "";
+        missed.forEach(({
+          q, i
+        }) => {
+          const li = document.createElement("li");
+          const user = marks[i].userChoice;
+          const userText = (typeof user === "number" && q.choices && q.choices[user]) ? q.choices[user] : "(nezodpovedané)";
+          const correctText = (q.choices && q.choices[q.correct]) ? q.choices[q.correct] : "(neznáme)";
+          li.innerHTML = `<strong>(${q.points || 0
+            }b) ${escapeHtml(q.q)}</strong>
+<pre>Tvoja odpoveď: ${escapeHtml(userText)}\nSprávna odpoveď: ${escapeHtml(correctText)}</pre>`;
+          els.missedList.appendChild(li);
+        });
+      } else {
+        els.missedBox.style.display = "none";
+      }
 
-  // FULL REVIEW
-  els.reviewList.innerHTML = "";
-  test.forEach((q, i) => {
-    const m = marks[i];
-    const statusEmoji = m.status === "correct" ? "✅" : (m.status === "wrong" ? "❌" : "—");
-    const user = (typeof m.userChoice === "number" && q.choices && q.choices[m.userChoice]) ? q.choices[m.userChoice] : "(nezodpovedané)";
-    const correct = (q.choices && q.choices[q.correct]) ? q.choices[q.correct] : "(neznáme)";
-    const expl = makeExplanation(q.q, stripChoicePrefix(correct));
+      // FULL REVIEW
+      els.reviewList.innerHTML = "";
+      test.forEach((q, i) => {
+        const m = marks[i];
+        const statusEmoji = m.status === "correct" ? "✅" : (m.status === "wrong" ? "❌" : "—");
+        const user = (typeof m.userChoice === "number" && q.choices && q.choices[m.userChoice]) ? q.choices[m.userChoice] : "(nezodpovedané)";
+        const correct = (q.choices && q.choices[q.correct]) ? q.choices[q.correct] : "(neznáme)";
 
-    const div = document.createElement("div");
-    div.className = "reviewItem";
-    div.innerHTML = `
+        const div = document.createElement("div");
+        div.className = "reviewItem";
+        div.innerHTML = `
       <div style="margin-bottom:6px;">
         <span class="tag">${statusEmoji}</span>
         <span class="tag">${escapeHtml(String(q.points || 0))}b</span>
       </div>
       <strong>${escapeHtml(q.q)}</strong>
-      <pre>${escapeHtml("Tvoja odpoveď: " + user + "\nSprávna odpoveď: " + correct + "\nPrečo: " + expl)}</pre>
+      <pre>${escapeHtml("Tvoja odpoveď: " + user + "\nSprávna odpoveď: " + correct)}</pre>
     `;
-    els.reviewList.appendChild(div);
-  });
-}
+        els.reviewList.appendChild(div);
+      });
+    }
 
-// events
-els.startBtn.addEventListener("click", startTest);
-els.restartBtn.addEventListener("click", startTest);
+    // events
+    els.startBtn.addEventListener("click", startTest);
+    els.restartBtn.addEventListener("click", startTest);
 
-els.prevBtn.addEventListener("click", () => {
-  if (idx > 0) {
-    idx--;
-    render();
-  }
-});
-els.nextBtn.addEventListener("click", () => {
-  if (idx < test.length - 1) {
-    idx++;
-    render();
-  }
-});
-els.finishBtn.addEventListener("click", finish);
-</script>
+    els.prevBtn.addEventListener("click", () => {
+      if (idx > 0) {
+        idx--;
+        render();
+      }
+    });
+    els.nextBtn.addEventListener("click", () => {
+      if (idx < test.length - 1) {
+        idx++;
+        render();
+      }
+    });
+    els.finishBtn.addEventListener("click", finish);
+  </script>
 </body>
+
 </html>
